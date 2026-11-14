@@ -1,140 +1,117 @@
-# Roll Call: design spec
+# Roll Call: design spec (v2, software only)
 
 Date: 2026-11-14. Event: DurHack 2026 (14-15 November, 24 hours). Team: solo.
-Primary target: RS challenge (sense, analyse, decide, trigger an action). Secondary: Neptune North (resilience when comms fail).
 
-## 1. Problem
+Supersedes v1 (hardware build for the RS challenge). The loan library ran out of every board, so v2 needs no hardware. v1 is in git history.
 
-In a building fire, responders do not know who is still inside. Door counters (laser beams) miscount when people pass together, cameras go blind in smoke, and motion sensors miss people who are lying still. Today's practice is a warden roll call against a register, which misses visitors and gives no location. The decision to risk a search depends on this information.
+## 1. Targets
 
-## 2. Goal
-
-A prototype that gives an incident commander a per-room status board:
-
-- **Confirmed empty**: door counts and room sensors agree, readings are recent.
-- **Possibly occupied**: sensors disagree, or the count is above zero.
-- **Occupied, still**: a person is detected by breathing, with no movement.
-- **Unknown**: sensor is silent, stale or blind. Never shown as empty.
-
-Each room shows a confidence value and the age of its last reading.
-
-Stretch goal: a suggested route and rescue priority (section 7).
-
-## 3. Scope
-
-Minimum version (build first):
-
-- One door and one room, then a second room if time allows.
-- Radar for presence and door tracking, camera for counting in clear air.
-- Fusion, room status logic, dashboard, buzzer and status light.
-
-Out of scope: certified life-safety behaviour, identification of individuals, real smoke or fire, real building networks.
-
-## 4. Architecture
-
-Components, each with one job:
-
-1. **Door node**: camera plus radar facing a doorway. Outputs crossing events (direction, count, per-sensor confidence). Flags disagreement between sensors.
-2. **Room node**: radar (optional thermal) inside the room. Outputs a presence state (empty, moving, still) and a confidence.
-3. **Fusion engine**: keeps a running headcount per room. Door events update it, room presence corrects it. If a room sensor sees someone while the count says zero, presence wins and the room is "possibly occupied".
-4. **Visibility estimator**: scores camera visibility from 0 to 100 using contrast, edge sharpness and brightness. Lowers the camera's weight as visibility falls, so radar takes over.
-5. **Safety layer** (microcontroller): reads sensors, drives buzzer, lights and relay. Works if the laptop or camera software crashes.
-6. **Dashboard**: floor plan with room states, confidence, reading age and an event log.
-
-Data flow: sensors, then fusion, then room state, then dashboard and alarms. Every event carries a timestamp and a confidence, so staleness is automatic.
-
-### Camera pipeline
-
-- Person detection: a small pre-trained detector (YOLO nano or MobileNet-SSD, or the UNO Q App Lab object-detection example filtered to "person"). Low resolution, a few frames per second.
-- Counting: centroid or ByteTrack-style tracker plus a virtual line across the doorway, +1 or -1 by direction.
-- Mount high or overhead so people walking together do not hide each other.
-
-### Wireless link and failure behaviour (Neptune North angle)
-
-- Nodes send small messages (room, count, confidence, timestamp) over ESP-NOW or Wi-Fi in the demo. A real building would use a mesh or LoRa with batteries.
-- Each node keeps its own last state and sounds its own alarm without the laptop.
-- On reconnect, nodes resend buffered readings and the board catches up.
-- A node that goes silent turns to Unknown.
-- Demo: cut the link, show a node still working, reconnect, show the board recover.
-
-## 5. Demo plan
-
-Judges are the actors. Sensors on a tripod at a doorway, a taped "room" zone behind it.
-
-1. Problem statement (20 s).
-2. Two judges walk through together: count shows +2, sensors agree.
-3. Drift correction: force the count to 0 while someone stands in the zone, room flips to possibly occupied with the reason shown.
-4. Smoke: cover the camera lens, visibility score falls, radar holds the person, a person standing still shows as occupied, still.
-5. Alarm and cut-off: buzzer, red light, relay switches a lamp or small fan.
-6. Commander view: ranked rooms with confidence and reading age.
-7. Limits stated honestly (20 s).
-
-Fallbacks: recorded backup video of the full run, and a simulated-data mode on the laptop. Simulated parts must be labelled "SIMULATED" on screen and live parts "LIVE". A screen showing smoke footage cannot test the radar, so the still-person beat must use a real person.
-
-## 6. Risks and mitigations
-
-| Risk | Mitigation |
+| Prize | Why this project fits |
 |---|---|
-| No UNO Q available | Ask RS team for a written substitute (section 8) or move the idea to Marshall Wace or Accenture |
-| No radar module in the loan library | Thermal array, then camera only with "unknown when blind" behaviour |
-| Radar counting is noisy | Room-presence correction, wording of "possibly occupied", no precision claims |
-| Radar module cannot see still people | Test with a seated person first, prefer a module that reports breathing |
-| Solo integration time | Minimum version first, one door and one room |
-| Over-claiming | Prototype for decision support, limits stated, no survival percentages |
-| Sprinklers, hot air and heat affect radar and nodes | State as untested open problems, add a sensor-health input so a failing node reports Unknown |
+| Neptune North (primary) | Many actors, one goal, each decides alone, progress continues when comms fail |
+| Accenture | The paper fire roll call is a frustrating process people accept; an LLM turns node data into a commander's brief |
+| DurHack overall (theme: Composition) | Judged on creativity, polish, technical execution, research. The board is also heard: each room has a tone |
+| MLH Best Use of ElevenLabs | Spoken commander's brief |
+| MLH Best Use of Gemini API | The LLM brief |
+| MLH DEV Writing Challenge | Write-up after the event |
 
-## 7. Stretch: route and rescue priority
+Whether one project may enter several sponsor prizes is unconfirmed. Ask the organisers.
 
-- Model the building as a small graph (rooms, corridors, exits). Link cost comes from temperature, smoke or VOC level and flame seen by the camera. A link with flames is blocked.
-- Shortest-path search gives the lowest-risk route to a room with a person. Raising a hazard slider reroutes it.
-- Output is a **rescue priority score**, not a survival probability. Inputs: breathing detected, time since movement, local temperature and smoke, route hazard and distance. It is an unvalidated heuristic, always shown with its reasons and the label "suggested, based on sensor data only". The commander decides.
-- Demo with simulated hazard sliders on the laptop.
+## 2. Problem
 
-## 8. Hardware list and substitutes
+In a building fire, responders do not know who is still inside. The current answer is a warden's roll call against a register at the assembly point. It misses visitors, gives no location and is stale by the time crews arrive. Fixed systems that could help depend on a central panel and a network, and both fail in a fire.
 
-Stock in the RS loan library is unknown. Ask RS in writing whether a substitute is allowed before building around one. Use low-voltage loads only (no mains) and tell an organiser before using a loud buzzer.
+## 3. What Roll Call is
 
-| Role | Preferred | Substitute 1 | Substitute 2 | Last resort |
-|---|---|---|---|---|
-| Main board | Arduino UNO Q (4 GB) | Raspberry Pi 4 or 5 plus an ESP32 or Arduino | Laptop plus ESP32 | Laptop only (loses the independent safety layer) |
-| Sensor and alarm microcontroller | UNO Q microcontroller side | ESP32 DevKit (WROOM) | ESP32-S3, Arduino Nano ESP32, Raspberry Pi Pico W | Arduino Uno or Nano (no Wi-Fi) |
-| Camera | Supplied USB camera | Any UVC USB webcam | Nicla Vision, Raspberry Pi camera | Phone camera streamed over Wi-Fi |
-| Radar, door and presence | HLK-LD2450 (24 GHz, tracks up to 3 targets) | RD-03D (24 GHz, multi-target) | Seeed 60 GHz breathing module (MR60BHA2) for still people | HLK-LD2410 (one target, good at still presence) |
-| Smoke-proof backup sensor | Thermal array, MLX90640 | AMG8833 (8x8 thermal) | PIR plus ultrasonic (HC-SR04) | None |
-| Temperature and hazard sensing (stretch) | BME680 (temperature, humidity, gas) | SGP30 (VOC) plus DS18B20 (temperature) | MQ-2 or MQ-135 gas sensor, DHT22 | Simulated values on the laptop |
-| Alarm | Active piezo buzzer | Passive buzzer | Speaker on laptop | None |
-| Status lights | Red and green LEDs with 220 ohm resistors | WS2812 LED strip | Onboard board LEDs | None |
-| Cut-off | 1-channel 5 V opto-isolated relay module | Solid-state relay module | Transistor driving a 5 V fan or lamp | Show the relay click only |
-| Load to switch | Small 5 V fan or low-voltage lamp | LED lamp on a USB port | A motor (loan library) | Indicator LED |
-| Manual control (optional) | Modulino Knob | Push button | Laptop keyboard | None |
-| USB and power | Powered USB hub (supplied), USB-C power bank | Laptop USB ports | Any 5 V USB charger | None |
-| Wiring and mounting | Breadboard, jumper wires, tripod or clamp | Cardboard stand, tape, cable ties | Mini tripod for a phone | None |
+A set of independent nodes that together keep one answer current: which rooms are confirmed empty, possibly occupied, occupied, or unknown. No node is in charge. Each node holds its own copy of the building state, decides from what it knows, and merges with any node it can reach.
 
-Radar modules are mostly 3.3 V or 5 V UART devices, so check voltage and TX/RX crossing when wiring.
+Actors:
 
-## 9. Open questions (resolve in the first hour)
+- **Door nodes** count crossings through one door, by direction.
+- **Room nodes** report presence in one room (empty, moving, still).
+- **Responders** carry a board, choose which room to search, and report what they find.
 
-1. Does the library stock any radar or presence sensor, and which?
-2. Will RS accept a substitute for the UNO Q? Get it in writing.
-3. Does the supplied camera work with the chosen board?
-4. Which radar can detect a seated, still person in a quick test?
+## 4. The hard part
 
-## 10. Prior work (to cite)
+Reconnecting and replaying messages is ordinary. The design work is in what nodes do while cut off and how conflicting observations are reconciled.
 
-- FireGuard (VTHacks, radar firefighter helmet, devpost.com/software/fire-guard).
-- PULSE, a low-cost 24 GHz radar search-and-rescue node (IIT, EIT 2026).
-- EWSN 2023, thermal plus mmWave radar fusion for people detection when vision degrades.
-- mmCounter (arXiv 2512.10357), static people counting with radar.
-- 8x8 thermopile doorway counter (PMC8231657) and the Milesight VS351 commercial counter.
-- Infineon radar entrance counter example, TI people-tracking reference designs, ESPHome LD2450 and RD-03D components.
+1. **Conflicting observations.** A door node says two people left room B; the room node still sees one. Neither is "the latest write". The answer must weigh sensor type, confidence and age, and every node must reach the same answer whatever order messages arrive in.
+2. **No double counting.** A person who moves between rooms during a partition must be counted once after the merge.
+3. **Knowledge decays.** "Room C is empty" is less true every minute. Each node ages other nodes' claims itself.
+4. **Asymmetric safety.** Wrongly saying "empty" can kill; wrongly saying "occupied" costs a search. One credible sighting outweighs several empty reports. Silence is never evidence of absence.
+5. **Deciding without a leader.** Two responders who cannot talk must not both pick the same room, and must not both assume the other has it.
 
-These came from search summaries and have not been read in full. Check them before quoting figures.
+## 5. Replicated state
+
+Every piece of state has exactly one writer, so merging is safe without coordination.
+
+| Record | Writer | Content | Merge rule |
+|---|---|---|---|
+| Door counter | That door's node | Crossings a->b and b->a (only ever increase), sequence number | Keep the higher sequence |
+| Room report | One sensor or responder, per room | State (empty, moving, still), count, confidence, sequence | Keep the higher sequence per writer |
+| Responder claim | That responder | Target room, position, sequence | Keep the higher sequence |
+
+- A crossing is recorded once, by the door it went through, as "out of a, into b". Occupancy of a room is the sum of crossings in minus crossings out over its doors. Because each counter has one writer and only grows, merging by maximum converges to the same totals on every node, and a person moving between rooms is never counted twice.
+- No synchronised clocks. Each record travels with its age, and the receiver converts that to its own clock. Age grows while a record waits in a cut-off node.
+- Nodes gossip their full state to any neighbour they can reach, so records travel across several hops.
+
+## 6. Belief
+
+Belief is a pure function of a node's merged records and its own clock. Two nodes with the same records compute the same belief. Rules, in order:
+
+1. A fresh sighting (moving or still) by any writer: **occupied** (or **occupied, still**). Count is the larger of the sighting and the door count.
+2. A stale sighting never becomes empty. It becomes **possibly occupied**, "last seen N ago".
+3. Fresh "empty" from the room sensor, door count zero, door counters fresh: **confirmed empty**.
+4. Fresh "empty" but door count above zero, or the reverse: **possibly occupied**, with the disagreement shown.
+5. "Empty" reports decay to **unknown** as they age. So do rooms whose door counters are stale.
+6. No records: **unknown**.
+
+Confidence is derived from age and agreement and is shown next to every state. A responder's search report counts as a strong sighting or a strong "empty" that also decays.
+
+## 7. Responders
+
+Each responder ranks rooms by a **rescue priority score** from its own belief: occupied-still first, then occupied, possibly occupied, unknown; adjusted by distance. The score is a heuristic, not a survival estimate, and is shown with its reasons.
+
+Assignment without talking: every responder runs the same deterministic assignment over the last known roster and positions, and takes its own row. Responders with the same belief therefore pick different rooms. If beliefs differ they may overlap; claims are replicated records, so the overlap resolves when they next hear each other.
+
+## 8. Build
+
+Static web app, no build step, ES modules.
+
+- `src/core/` replica (records, merge), belief, assignment. Pure functions, covered by tests.
+- `src/sim/` ground-truth world (people moving in a floor plan), a network with links that can be cut, and the node behaviours with sensor noise.
+- `src/ui/` the command board.
+
+Stage 1 (this spec): every node runs in one page as a separate replica, joined by the simulated network. Each node's own belief can be inspected and compared with the truth.
+
+Stage 2: real devices. A phone or laptop joins as a door node and counts with its camera (in-browser person detection, a tracker and a virtual line). Transport between devices is a relay that only forwards messages; each device keeps its own state.
+
+Stage 3: the brief. An LLM (Gemini) writes the commander's brief from a node's belief, and ElevenLabs speaks it. Each room also has a tone, so the board can be heard.
+
+Simulated parts are labelled on screen. Nothing here senses people through smoke; v1's radar is gone and the pitch must not claim it.
+
+## 9. Demo
+
+1. People move through the building; the board follows them.
+2. Cut a link. The two sides disagree, visibly: open each node's own view.
+3. A person changes room during the cut. Reconnect: the total is right and each room shows why.
+4. An "empty" claim ages into "unknown" with no one touching it.
+5. Two cut-off responders choose different rooms.
+6. The brief is read aloud.
+
+Scripted scenarios make each step repeatable. A recorded run is the backup.
+
+## 10. Interface direction
+
+Not a generic dark dashboard. The reference is the UK fire service's breathing-apparatus entry control board and a fire pre-plan drawing: a drawn floor plan, tally slots, signage colours (safe-condition green, fire red, hazard yellow) on a light drawing surface, condensed grotesque lettering and tabular figures. One accent (fire red) for action; state colours carry meaning and always come with a text label. Square corners throughout. Light and dark both supported.
 
 ## 11. Success criteria
 
-- Two people crossing together are counted correctly in a live run.
-- A forced miscount is corrected by room presence and the dashboard shows why.
-- Covering the camera shifts trust to radar and the room stays occupied.
-- A silent node shows Unknown, never empty.
-- A physical action (buzzer, light, relay) is visible.
-- A recorded backup demo exists.
+- Tests show merge is order-independent and totals survive a partition.
+- A sighting is never downgraded to empty by merge or by age.
+- Each demo step above works from a scripted scenario.
+- A silent room shows unknown, never empty.
+
+## 12. Prior work
+
+FireGuard (VTHacks, radar firefighter helmet); SUAR and ResistX (offline phone meshes for disaster communication); PULSE (low-cost radar rescue node); EWSN 2023 thermal and radar fusion; mmCounter (static people counting). None of those found does room-by-room occupant accounting with confidence for responders. These came from search summaries and were not read in full.

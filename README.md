@@ -2,9 +2,9 @@
 
 Our entry for [DurHack 2026](https://durhack-26.devpost.com/), Durham, 14-15 November 2026 (24 hours).
 
-> **Roll Call**: a fire-incident occupancy board that tells responders which rooms are confirmed empty, possibly occupied, occupied (still) or unknown, using door tracking, room radar and a camera that hands over to radar in smoke. Solo entry. Design: [docs/superpowers/specs/2026-11-14-roll-call-design.md](docs/superpowers/specs/2026-11-14-roll-call-design.md)
+> **Roll Call**: a fire-incident occupancy board that tells responders which rooms are confirmed empty, possibly occupied, occupied (still) or unknown, kept by independent nodes that each decide alone and merge when they can reach each other. Software only. Solo entry. Design: [docs/superpowers/specs/2026-11-14-roll-call-design.md](docs/superpowers/specs/2026-11-14-roll-call-design.md)
 
-Targets: RS challenge (primary), Neptune North (nodes keep working when comms fail).
+Targets: Neptune North (primary), Accenture, the overall prizes, MLH ElevenLabs and Gemini.
 
 ## Sponsor challenges (from the opening ceremony slides)
 
@@ -21,10 +21,24 @@ Full notes in [docs/challenges.md](docs/challenges.md). One-line summary:
 | Raspberry Pi | Improve the world by connecting things that usually aren't | Pico Inventors Kit |
 | QRT | Tagged (physical language that encodes digital information) and Spray n' Tag CTF | AirPods Pro / poker sets / £100 keyboard voucher |
 
+## Run it
+
+No build step. Serve the folder and open it:
+
+```bash
+python -m http.server 8200
+```
+
+Then open http://localhost:8200. Tests: `node --test`.
+
+What you see is a simulation: people, sensors and the radio network are simulated, and every node keeps its own separate copy of the state. Select any node on the plan to see the building as that node believes it.
+
 ## Layout
 
 - `docs/` notes, brief, pitch
-- `src/` code (add when the idea is chosen)
+- `src/core/` replicated state, belief rules, responder assignment (tested)
+- `src/sim/` simulated people, sensors and network
+- `src/ui/` the command board
 
 ## Links
 

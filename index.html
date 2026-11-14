@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Roll Call</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="src/ui/style.css">
+</head>
+<body>
+<header class="bar">
+  <div class="brand">
+    <span class="mark" aria-hidden="true"></span>
+    <h1>Roll Call</h1>
+  </div>
+  <div class="clock"><span class="k">Incident clock</span><span class="v" id="clock">00:00</span></div>
+  <div class="stat"><span class="k">Believed inside</span><span class="v" id="inside">0</span></div>
+  <div class="stat"><span class="k">Actually inside</span><span class="v" id="truth">0</span></div>
+  <div class="stat"><span class="k">Rooms unknown</span><span class="v" id="unknowns">0</span></div>
+  <div class="controls">
+    <button id="alarm" class="primary">Raise alarm</button>
+    <button id="cut" aria-pressed="false">Cut east link</button>
+    <button id="fail">Fail a sensor</button>
+    <button id="pause" aria-pressed="false">Pause</button>
+    <button id="speed">Speed 1x</button>
+    <button id="reset">Reset</button>
+  </div>
+</header>
+
+<main>
+  <section class="plan" aria-label="Floor plan">
+    <div class="plan-head">
+      <h2>Ground floor, as believed by <span id="viewer-name">Command post</span></h2>
+      <label class="check"><input type="checkbox" id="show-truth" checked> Show real people <em>(simulation only)</em></label>
+    </div>
+    <svg id="map" viewBox="-120 -10 1180 620" role="img" aria-label="Floor plan with rooms, sensors and people"></svg>
+    <p class="hint">Select any sensor or responder on the plan to see the building as that node believes it. Every node keeps its own copy.</p>
+  </section>
+
+  <aside class="board" aria-label="Search order">
+    <h2>Search order</h2>
+    <p id="brief" class="brief"></p>
+    <ol id="tally" class="tally"></ol>
+    <ul class="key" aria-label="Key">
+      <li><i class="sw still"></i>Occupied, still</li>
+      <li><i class="sw occupied"></i>Occupied</li>
+      <li><i class="sw possible"></i>Possibly occupied</li>
+      <li><i class="sw unknown"></i>Unknown</li>
+      <li><i class="sw empty"></i>Confirmed empty</li>
+    </ul>
+  </aside>
+
+  <section class="matrix" aria-label="What each node believes">
+    <h2>What each node believes</h2>
+    <div id="matrix" class="matrix-scroll"></div>
+  </section>
+
+  <section class="log" aria-label="Event log">
+    <h2>Log</h2>
+    <ol id="log"></ol>
+  </section>
+</main>
+
+<script type="module" src="src/ui/app.js"></script>
+</body>
+</html>
