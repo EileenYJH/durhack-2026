@@ -256,3 +256,47 @@ fieldset { border: 1px solid var(--rule); padding: 10px 12px; margin: 0; display
 .filebtn { font: 600 15px/1 var(--display); text-transform: uppercase; letter-spacing: 0.06em; padding: 9px 13px; border: 2px solid var(--ink); background: var(--sheet); cursor: pointer; display: inline-block; }
 .filebtn input { position: absolute; width: 1px; height: 1px; opacity: 0; }
 .filebtn:focus-within { outline: 3px solid var(--hazard); outline-offset: 2px; }
+
+/* ---- chaos toolbar, fire and measures ---- */
+.chaos { display: flex; flex-wrap: wrap; gap: 8px 10px; align-items: center; padding: 8px 14px; background: var(--ink); color: var(--sheet); }
+.chaos-title { font: 700 17px/1 var(--display); text-transform: uppercase; letter-spacing: 0.1em; color: var(--hazard); margin-right: 4px; }
+.chaos .modes { display: flex; flex-wrap: wrap; gap: 0; }
+.chaos button { border-color: var(--sheet); background: var(--ink); color: var(--sheet); padding: 7px 11px; font-size: 14px; }
+.chaos .modes button + button { margin-left: -2px; }
+.chaos button:hover { background: var(--muted); }
+.chaos button[aria-pressed="true"] { background: var(--hazard); border-color: var(--hazard); color: #14202b; position: relative; z-index: 1; }
+.chaos .tool-help { color: var(--rule); }
+main { grid-template-areas: "plan board" "metrics metrics" "matrix log"; }
+.metrics { grid-area: metrics; }
+@media (max-width: 1000px) { main { grid-template-areas: "plan" "board" "metrics" "matrix" "log"; } }
+.metric-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(128px, 1fr)); gap: 8px; margin: 8px 0 0; }
+.metric-grid div { border: 1.5px solid var(--ink); padding: 6px 9px; background: var(--sheet); }
+.metric-grid dt { font: 500 12px/1.2 var(--display); text-transform: uppercase; letter-spacing: 0.07em; color: var(--muted); }
+.metric-grid dd { margin: 2px 0 0; font: 700 24px/1.1 var(--display); }
+.metric-grid .warn { border-left: 8px solid var(--hazard); }
+.metric-grid .bad { border-left: 8px solid var(--fire); }
+.metric-grid .bad dd { color: var(--fire); }
+.heat-line { font-size: 13px; font-weight: 600; }
+.heat-line.hot { color: var(--hazard); }
+.heat-line.fire { color: var(--fire); }
+.heat-line.ok { color: var(--muted); font-weight: 400; }
+#map .heat { fill: #ff5a1f; pointer-events: none; }
+#map .heat.burning { fill: #ff2a00; }
+#map .smoke { fill: #2a2f33; pointer-events: none; }
+#map .temp { font-size: 15px; font-weight: 700; fill: var(--fire) !important; letter-spacing: 0.04em; pointer-events: none; paint-order: stroke; stroke: var(--sheet); stroke-width: 3px; }
+#map .lost-door { stroke: var(--fire); stroke-width: 5; fill: none; pointer-events: none; }
+#map .link.weak { stroke-dasharray: 2 5; }
+#map .link.severed { stroke: var(--fire); stroke-width: 2; stroke-dasharray: 6 5; opacity: 0.85; }
+#map .linkhit { stroke: transparent; stroke-width: 14; cursor: crosshair; }
+#map[data-mode="sever"] .linkhit:hover { stroke: var(--hazard); opacity: 0.5; }
+#map[data-mode="ignite"] .room-fill { cursor: crosshair; }
+#map .person.lost { stroke: var(--muted); stroke-width: 3; fill: none; }
+#map .air-track { fill: var(--rule); }
+#map .air { fill: var(--go); }
+#map .air.low { fill: var(--fire); }
+#map .mayday-ring { fill: none; stroke: var(--fire); stroke-width: 4; }
+#map .mayday-text { font-size: 14px; font-weight: 700; fill: var(--fire) !important; letter-spacing: 0.08em; paint-order: stroke; stroke: var(--sheet); stroke-width: 3px; }
+@media (prefers-reduced-motion: no-preference) {
+  #map .mayday-ring { animation: beat 0.9s ease-in-out infinite; transform-origin: center; transform-box: fill-box; }
+  @keyframes beat { 50% { transform: scale(1.25); opacity: 0.35; } }
+}

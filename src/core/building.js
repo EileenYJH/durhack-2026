@@ -94,14 +94,16 @@ export function roomCentre(roomId) {
 }
 
 // Shortest door-to-door route between rooms, as a list of door ids.
-// `avoid` is a set of rooms the route must not pass through (a room on fire).
-export function route(from, to, avoid = new Set()) {
+// `avoid` is a set of rooms the route must not pass through (a room on fire);
+// `blocked` is a set of doors that cannot be used.
+export function route(from, to, avoid = new Set(), blocked = new Set()) {
   if (from === to) return [];
   const prev = { [from]: null };
   const queue = [from];
   while (queue.length) {
     const cur = queue.shift();
     for (const d of doorsOf(cur)) {
+      if (blocked.has(d)) continue;
       const nxt = otherSide(d, cur);
       if (nxt in prev) continue;
       if (avoid.has(nxt) && nxt !== to) continue;
@@ -121,10 +123,13 @@ export function route(from, to, avoid = new Set()) {
   return [];
 }
 
-export function routeLength(fromPos, fromRoom, toRoom) {
+// Walking distance, or Infinity when there is no way through.
+export function routeLength(fromPos, fromRoom, toRoom, avoid, blocked) {
   let pos = fromPos;
   let len = 0;
-  for (const d of route(fromRoom, toRoom)) {
+  const doors = route(fromRoom, toRoom, avoid, blocked);
+  if (!doors.length && fromRoom !== toRoom) return Infinity;
+  for (const d of doors) {
     const p = DOORS[d];
     len += Math.hypot(p.x - pos.x, p.y - pos.y);
     pos = p;

@@ -21,18 +21,40 @@ export function rankRooms(belief) {
     .sort((a, b) => b.score - a.score || a.room.localeCompare(b.room));
 }
 
+const PEOPLE = new Set(['still', 'occupied', 'possible']);
+
+// Priority once heat is taken into account. People believed to be in a room
+// that is heating up come first. A burning room with nobody known inside is
+// not searched at all: risk nothing to save nothing.
+export const ATTENDED = 25; // seconds a room counts as dealt with after a firefighter has been in it
+
+export function urgency(b, hazard) {
+  // A teammate has just been in there and is bringing out whoever they found.
+  if (b.attended !== null && b.attended !== undefined && b.attended < ATTENDED) return 0;
+  const p = priority(b);
+  if (!hazard || p <= 0) return p;
+  const people = PEOPLE.has(b.state);
+  if (hazard.level === 'fire') return people ? p + 30 : 0;
+  if (hazard.level === 'hot') return people ? p + 20 : p;
+  return p;
+}
+
 // responders: [{ id, room, x, y }] with last known positions.
-export function assign(belief, responders) {
+// hazards: per-room heat belief. blocked: doors believed impassable.
+// skip: rooms this responder has just been turned back from.
+export function assign(belief, responders, { hazards = {}, blocked = new Set(), skip = new Set() } = {}) {
+  const avoid = new Set(Object.keys(hazards).filter((id) => hazards[id].level === 'fire'));
   const taken = new Set();
   const out = {};
   const ordered = [...responders].sort((a, b) => a.id.localeCompare(b.id));
   for (const r of ordered) {
     let best = null;
     for (const id of ROOM_IDS) {
-      if (ROOMS[id].hall || taken.has(id)) continue;
-      const p = priority(belief[id]);
+      if (ROOMS[id].hall || taken.has(id) || skip.has(id)) continue;
+      const p = urgency(belief[id], hazards[id]);
       if (p <= 0) continue;
-      const dist = routeLength({ x: r.x, y: r.y }, r.room, id);
+      const dist = routeLength({ x: r.x, y: r.y }, r.room, id, avoid, blocked);
+      if (!Number.isFinite(dist)) continue; // no way in that avoids the fire
       const score = p - dist / 40;
       if (!best || score > best.score || (score === best.score && id < best.room)) best = { room: id, score };
     }

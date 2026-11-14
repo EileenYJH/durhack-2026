@@ -34,6 +34,17 @@ function who(writer) {
   return writer;
 }
 
+// Net crossings into a room by its door counters, or null if a door is unheard.
+export function doorNet(rep, roomId) {
+  let net = 0;
+  for (const id of doorsOf(roomId)) {
+    const rec = rep.doors[id];
+    if (!rec) return null;
+    net += DOORS[id].b === roomId ? rec.ab - rec.ba : rec.ba - rec.ab;
+  }
+  return net;
+}
+
 function doorView(rep, roomId, now) {
   let net = 0;
   let known = true;
@@ -48,6 +59,13 @@ function doorView(rep, roomId, now) {
     net += d.b === roomId ? rec.ab - rec.ba : rec.ba - rec.ab;
     oldest = Math.max(oldest, now - rec.at);
   }
+  // A responder who counted heads in the room recorded how far the counters
+  // had drifted. Counters only ever grow, so that offset stays valid.
+  let fix = null;
+  for (const rec of Object.values(rep.reports)) {
+    if (rec.room === roomId && rec.kind === 'search' && typeof rec.drift === 'number' && (!fix || rec.at > fix.at)) fix = rec;
+  }
+  if (fix) net -= fix.drift;
   return { known, count: Math.max(0, net), drift: net < 0, age: oldest };
 }
 
@@ -75,7 +93,12 @@ export function roomBelief(rep, roomId, now, P = PARAMS) {
 
   const doorsFresh = doors.known && doors.age < P.STALE;
   const E = { FRESH: P.EMPTY_FRESH, STALE: P.EMPTY_STALE }; // horizon for "nobody here"
-  const base = { room: roomId, doorCount: doors.known ? doors.count : null, doorsAge: doors.known ? doors.age : null };
+  // How long ago anyone last walked this room, whatever they found.
+  let attended = null;
+  for (const rec of Object.values(rep.reports)) {
+    if (rec.room === roomId && rec.kind === 'search' && (attended === null || now - rec.at < attended)) attended = now - rec.at;
+  }
+  const base = { room: roomId, doorCount: doors.known ? doors.count : null, doorsAge: doors.known ? doors.age : null, attended };
 
   // The most recent word on this room is a sighting.
   // A sensor that misses a motionless person for a moment must not clear the
@@ -110,7 +133,11 @@ export function roomBelief(rep, roomId, now, P = PARAMS) {
     // A responder who walked the room is stronger evidence than a sensor, and
     // overrides door counters that have drifted. It still decays.
     if (searched && (!sight || searched.age < sight.age)) {
-      const trustSearch = decay(searched.age / 3, E);
+      // A cleared room stays cleared for as long as its door counters are still
+      // being heard and show that nobody has gone in since. Without that
+      // evidence the search is trusted only briefly.
+      const sealed = doors.known && doors.age < P.EMPTY_STALE * 2 && doors.count === 0;
+      const trustSearch = sealed ? decay(searched.age / 20, E) : decay(searched.age / 3, E);
       if (trustSearch > 0) {
         return {
           ...base,

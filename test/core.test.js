@@ -269,3 +269,78 @@ test('the built-in building is restored after that', () => {
   assert.ok(ROOMS.COR && DOORS.dW);
   assert.match(directions('OUT', 'C').join(' '), /Seminar is the 3rd door on your left/);
 });
+
+import { roomHazard, blockedDoors } from '../src/core/hazard.js';
+import { writeEnv } from '../src/core/replica.js';
+
+test('a counted search corrects door drift for good', () => {
+  const rep = createReplica('n');
+  allDoors(rep, 0, { dW: [1, 0], dD: [1, 0] }); // one exit was missed: counters say 1 inside
+  writeReport(rep, 'D', 'R1', { state: 'empty', count: 0, conf: 0.98, kind: 'search', drift: 1 }, 1);
+  // long after the search itself has expired, the sensor alone can confirm empty
+  allDoors(rep, 200, { dW: [1, 0], dD: [1, 0] });
+  writeReport(rep, 'D', 'room-D', { state: 'empty', count: 0, kind: 'sensor' }, 200);
+  assert.equal(roomBelief(rep, 'D', 200).state, 'empty');
+  // and a new arrival is still counted on top of the correction
+  allDoors(rep, 210, { dW: [2, 0], dD: [2, 0] });
+  writeReport(rep, 'D', 'room-D', { state: 'empty', count: 0, kind: 'sensor' }, 210);
+  assert.equal(roomBelief(rep, 'D', 210).state, 'possible');
+});
+
+test('a sensor that goes silent while hot is presumed burning', () => {
+  const rep = createReplica('n');
+  writeEnv(rep, 'C', 'room-C', { room: 'C', temp: 240, rate: 12, smoke: 0.5 }, 0);
+  assert.equal(roomHazard(rep, 'C', 1).level, 'hot');
+  const later = roomHazard(rep, 'C', 30);
+  assert.equal(later.level, 'fire');
+  assert.match(later.why, /Sensor lost at 240/);
+  // a cool sensor going silent is not treated as fire
+  writeEnv(rep, 'A', 'room-A', { room: 'A', temp: 24, rate: 0, smoke: 0 }, 0);
+  assert.equal(roomHazard(rep, 'A', 30).level, 'ok');
+  assert.equal(roomHazard(rep, 'B', 30).level, 'unknown');
+});
+
+test('a rising reading is projected forward', () => {
+  const rep = createReplica('n');
+  writeEnv(rep, 'C', 'room-C', { room: 'C', temp: 90, rate: 20, smoke: 0.2 }, 0);
+  assert.equal(roomHazard(rep, 'C', 0).level, 'ok');
+  assert.equal(roomHazard(rep, 'C', 3).level, 'hot'); // 90 + 20 x 3 = 150
+});
+
+test('responders route around fire and blocked doors, and leave an empty burning room alone', () => {
+  const rep = createReplica('n');
+  allDoors(rep, 0);
+  writeReport(rep, 'B', 'room-B', { state: 'still', count: 1 }, 0);
+  writeEnv(rep, 'door:dB', 'R2', { door: 'dB', blocked: true }, 0);
+  assert.deepEqual([...blockedDoors(rep)], ['dB']);
+  assert.deepEqual(route('OUT', 'B', new Set(), blockedDoors(rep)), ['dW', 'dA', 'dAB']);
+  assert.deepEqual(route('OUT', 'B', new Set(['A']), blockedDoors(rep)), []);
+
+  const belief = buildingBelief(rep, 1);
+  const team = [{ id: 'R1', room: 'OUT', x: 0, y: 300 }];
+  assert.equal(assign(belief, team, { blocked: blockedDoors(rep) }).R1, 'B');
+  // Lab 1 burning cuts the only way left into Lab 2
+  assert.notEqual(assign(belief, team, { blocked: blockedDoors(rep), hazards: { A: { level: 'fire' } } }).R1, 'B');
+  // a burning room with nobody known inside is never chosen
+  const fire = { C: { level: 'fire' } };
+  for (let i = 0; i < 3; i++) assert.notEqual(assign(belief, team, { hazards: fire }).R1, 'C');
+});
+
+test('fire spreads, destroys sensors and blocks doors; a downed firefighter is reached', () => {
+  const sim = createSim(5);
+  const run = (s) => { for (let i = 0; i < s * 10; i++) sim.step(0.1); };
+  run(5);
+  sim.raiseAlarm();
+  sim.setFireSpeed(3);
+  run(25);
+  sim.mayday('R2');
+  run(120);
+  const m = sim.metrics();
+  assert.ok(m.sensorsAlive < m.sensorsTotal, 'heat destroyed at least one sensor');
+  assert.ok(sim.blocked.size > 0, 'a flashover took out doors');
+  assert.ok(m.burning >= 2, 'the fire spread to another room');
+  assert.equal(m.safe + m.inside + m.lost, m.total, 'every person is accounted for');
+  const r2 = sim.node('R2');
+  assert.ok(m.maydays >= 1);
+  assert.ok(m.crewRecovered >= 1 || !r2.alive || r2.status === 'mayday', 'the mayday was answered or is still open');
+});

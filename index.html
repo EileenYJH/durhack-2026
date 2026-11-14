@@ -24,12 +24,26 @@
     <a class="navlink" href="live.html">Live nodes</a>
     <button id="alarm" class="primary">Raise alarm</button>
     <button id="cut" aria-pressed="false">Cut the link</button>
-    <button id="fail">Fail a sensor</button>
     <button id="pause" aria-pressed="false">Pause</button>
     <button id="speed">Speed 1x</button>
     <button id="reset">Reset</button>
   </div>
 </header>
+
+<div class="chaos" role="toolbar" aria-label="Chaos controls">
+  <span class="chaos-title">Break it</span>
+  <div class="modes" role="radiogroup" aria-label="What a click on the plan does">
+    <button data-mode="inspect" aria-pressed="true">Inspect</button>
+    <button data-mode="sever" aria-pressed="false">Sever a link</button>
+    <button data-mode="door" aria-pressed="false">Collapse a doorway</button>
+    <button data-mode="kill" aria-pressed="false">Kill a sensor</button>
+    <button data-mode="ignite" aria-pressed="false">Start a fire</button>
+    <button data-mode="mayday" aria-pressed="false">Firefighter down</button>
+  </div>
+  <button id="jam">Jam radio 10 s</button>
+  <button id="fire-speed">Fire speed 1x</button>
+  <span id="mode-help" class="tool-help"></span>
+</div>
 
 <main>
   <section class="plan" aria-label="Floor plan">
@@ -63,6 +77,11 @@
       <li><i class="sw empty"></i>Confirmed empty</li>
     </ul>
   </aside>
+
+  <section class="metrics" aria-label="Live measures">
+    <h2>Live measures</h2>
+    <dl id="metrics" class="metric-grid"></dl>
+  </section>
 
   <section class="matrix" aria-label="What each node believes">
     <h2>What each node believes</h2>

@@ -115,3 +115,17 @@ Not a generic dark dashboard. The reference is the UK fire service's breathing-a
 ## 12. Prior work
 
 FireGuard (VTHacks, radar firefighter helmet); SUAR and ResistX (offline phone meshes for disaster communication); PULSE (low-cost radar rescue node); EWSN 2023 thermal and radar fusion; mmCounter (static people counting). None of those found does room-by-room occupant accounting with confidence for responders. These came from search summaries and were not read in full.
+
+## 13. Fire and failure model (added 15 November)
+
+Ground truth only; no node reads it directly.
+
+- **Fire:** each room has heat and smoke. A burning room heats towards 850°C and feeds its neighbours through doorways. A room ignites at 300°C and flashes over at 600°C, which destroys its doors, its sensors and anyone inside.
+- **Sensors:** a room sensor fails at 250°C and a door sensor at 320°C. Smoke lowers what a camera sees; above 45% smoke a sensor that sees nobody says nothing, because it cannot tell.
+- **Radio:** the chance a message gets through falls with smoke at either end. Links can be cut by hand and the whole band can be jammed.
+- **People:** they head for the nearest exit that avoids rooms too hot to cross, queue at doorways, slow down in smoke, collapse after enough of it, and die in lethal heat.
+- **Firefighters:** limited air, used faster in smoke. They withdraw at 30% air, when their room passes 330°C, or when any room on their way out is heading for 240°C. What they find at a doorway (impassable, too hot) is written to the shared record.
+
+What nodes believe about it (`src/core/hazard.js`): each room's last heat reading projected forward by its rate of rise; a sensor that goes silent while reading over 100°C is presumed burnt. Responders route around rooms believed to be burning and doors reported lost, do not search a burning room with nobody known inside, and put a teammate's mayday (or 40 s of silence from inside) ahead of any search.
+
+Measured results are in `docs/evaluation.md`.

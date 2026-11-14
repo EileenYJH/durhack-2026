@@ -12,11 +12,12 @@ export function createReplica(id) {
     id,
     doors: {}, // doorId -> { seq, at, ab, ba }
     reports: {}, // `${room}|${writer}` -> { seq, at, room, writer, state, count, conf, kind }
-    claims: {}, // responderId -> { seq, at, target, room, x, y }
+    claims: {}, // responderId -> { seq, at, target, room, x, y, status, air }
+    env: {}, // `${place}|${writer}` -> { seq, at, writer, room, temp, rate, smoke } or { door, blocked }
   };
 }
 
-const KINDS = ['doors', 'reports', 'claims'];
+const KINDS = ['doors', 'reports', 'claims', 'env'];
 
 export function writeDoor(rep, doorId, ab, ba, now) {
   const prev = rep.doors[doorId];
@@ -34,12 +35,18 @@ export function writeClaim(rep, responderId, fields, now) {
   rep.claims[responderId] = { seq: (prev?.seq ?? 0) + 1, at: now, ...fields };
 }
 
+export function writeEnv(rep, place, writer, fields, now) {
+  const key = `${place}|${writer}`;
+  const prev = rep.env[key];
+  rep.env[key] = { seq: (prev?.seq ?? 0) + 1, at: now, writer, ...fields };
+}
+
 // What a node sends to a neighbour: every record, with age in place of time.
 export function snapshot(rep, now) {
   const out = { from: rep.id };
   for (const kind of KINDS) {
     out[kind] = {};
-    for (const [key, rec] of Object.entries(rep[kind])) {
+    for (const [key, rec] of Object.entries(rep[kind] ?? {})) {
       const { at, ...rest } = rec;
       out[kind][key] = { ...rest, age: now - at };
     }
@@ -53,6 +60,7 @@ export function merge(rep, snap, now, transit = 0) {
   let news = 0;
   for (const kind of KINDS) {
     for (const [key, incoming] of Object.entries(snap[kind] ?? {})) {
+      rep[kind] ??= {};
       const local = rep[kind][key];
       if (local && local.seq >= incoming.seq) continue;
       const { age, ...rest } = incoming;
@@ -67,7 +75,7 @@ export function merge(rep, snap, now, transit = 0) {
 export function fingerprint(rep) {
   const parts = [];
   for (const kind of KINDS) {
-    for (const key of Object.keys(rep[kind]).sort()) parts.push(`${kind}:${key}:${rep[kind][key].seq}`);
+    for (const key of Object.keys(rep[kind] ?? {}).sort()) parts.push(`${kind}:${key}:${rep[kind][key].seq}`);
   }
   return parts.join(',');
 }

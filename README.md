@@ -30,6 +30,7 @@ node server.js
 ```
 
 - http://localhost:8200/editor.html is the building editor: draw rooms, add doors and exits, or import a photo of a floor plan (needs `GEMINI_API_KEY`). "Use this building" makes every page work on your layout.
+- The simulation has a **Break it** toolbar: sever any radio link, collapse a doorway, kill a sensor, start a second fire, put a firefighter down, jam the radio or speed the fire up. Fire and smoke spread through doorways, sensors burn out, smoke blinds cameras and weakens radio, and firefighters run on limited air and pull out before their way out is lost.
 - http://localhost:8200 is the simulation: 19 nodes, each with its own copy of the state, on a network you can cut.
 - http://localhost:8200/live.html turns the device into a real node. Open it on several devices or windows with the same mesh code. Roles: command board, door camera (counts people crossing a doorway), room camera (reports presence and whether people are moving).
 - Tests: `node --test`. Safety measurement: `node scripts/evaluate.js 200`. Results are in [docs/evaluation.md](docs/evaluation.md).
