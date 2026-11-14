@@ -37,6 +37,22 @@ Optional keys go in `.env` (copy `.env.example`): `GEMINI_API_KEY` for the writt
 
 Phones need HTTPS to use their camera, so a phone camera node needs the server behind an HTTPS address (a tunnel or a hosted copy). A laptop on localhost works as it is.
 
+## Host it on Vultr
+
+A hosted copy gives phones the HTTPS address they need for their cameras, and lets devices on different networks join one mesh.
+
+1. In the Vultr dashboard, deploy a Cloud Compute server: Ubuntu 24.04, the smallest plan, and add your SSH key.
+2. Copy `.env.example` to `.env` and add your keys (optional).
+3. From this folder:
+
+```bash
+bash deploy/deploy.sh <server-ip> .env
+```
+
+It installs Node 22 and Caddy, runs Roll Call as a service on localhost, and puts Caddy in front with an automatic HTTPS certificate at `https://<ip-with-dashes>.sslip.io`. No domain is needed. Re-run the same command to update.
+
+The server keeps no data: the mesh relay only forwards messages. The Gemini and ElevenLabs proxies are limited to 30 requests a minute per address so a public copy cannot drain the keys.
+
 ## Layout
 
 - `docs/` notes, brief, pitch

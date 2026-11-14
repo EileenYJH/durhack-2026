@@ -19,6 +19,18 @@ try {
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT ?? 8200);
+const HOST = process.env.HOST ?? '0.0.0.0'; // 127.0.0.1 when a reverse proxy sits in front
+
+// The AI proxies spend the owner's keys, so cap them per address.
+const hits = new Map();
+function limited(req, limit = 30, windowMs = 60_000) {
+  const ip = (req.headers['x-forwarded-for'] ?? req.socket.remoteAddress ?? '').split(',')[0].trim();
+  const now = Date.now();
+  const recent = (hits.get(ip) ?? []).filter((t) => now - t < windowMs);
+  recent.push(now);
+  hits.set(ip, recent);
+  return recent.length > limit;
+}
 const GEMINI_KEY = process.env.GEMINI_API_KEY;
 const GEMINI_MODEL = process.env.GEMINI_MODEL ?? 'gemini-2.5-flash';
 const ELEVEN_KEY = process.env.ELEVENLABS_API_KEY;
@@ -114,6 +126,7 @@ const server = http.createServer(async (req, res) => {
     if (url.pathname === '/mesh/stream' && req.method === 'GET') return stream(req, res, mesh, id);
     if (url.pathname === '/mesh/send' && req.method === 'POST') return await relay(req, res, mesh, id);
     if (url.pathname === '/api/status') return send(res, 200, { gemini: Boolean(GEMINI_KEY), elevenlabs: Boolean(ELEVEN_KEY), peers: meshes.get(mesh)?.size ?? 0 });
+    if ((url.pathname === '/api/brief' || url.pathname === '/api/speak') && limited(req)) return send(res, 429, { error: 'Too many requests. Wait a minute.' });
     if (url.pathname === '/api/brief' && req.method === 'POST') return await brief(req, res);
     if (url.pathname === '/api/speak' && req.method === 'POST') return await speak(req, res);
 
@@ -127,7 +140,7 @@ const server = http.createServer(async (req, res) => {
   }
 });
 
-server.listen(PORT, () => {
+server.listen(PORT, HOST, () => {
   console.log(`Roll Call on http://localhost:${PORT}  (simulation: /, live nodes: /live.html)`);
   console.log(`Gemini brief: ${GEMINI_KEY ? 'on' : 'off'}   ElevenLabs voice: ${ELEVEN_KEY ? 'on' : 'off'}`);
 });
