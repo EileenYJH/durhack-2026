@@ -12,7 +12,10 @@ import { DOORS, ROOMS, ROOM_IDS, doorsOf } from './building.js';
 
 export const PARAMS = {
   FRESH: 6, // seconds a reading counts as current
-  STALE: 22, // seconds after which a reading is no longer trusted
+  STALE: 22, // seconds after which a sighting's confidence has fully decayed
+  EMPTY_FRESH: 2,
+  EMPTY_STALE: 6, // "nobody here" is trusted for far less time than a sighting
+  HOLD: 8, // an "empty" reading must outlast the last sighting by this long
 };
 
 export const STATES = ['still', 'occupied', 'possible', 'unknown', 'empty'];
@@ -71,10 +74,15 @@ export function roomBelief(rep, roomId, now, P = PARAMS) {
   }
 
   const doorsFresh = doors.known && doors.age < P.STALE;
+  const E = { FRESH: P.EMPTY_FRESH, STALE: P.EMPTY_STALE }; // horizon for "nobody here"
   const base = { room: roomId, doorCount: doors.known ? doors.count : null, doorsAge: doors.known ? doors.age : null };
 
   // The most recent word on this room is a sighting.
-  if (sight && (!clear || sight.age <= clear.age)) {
+  // A sensor that misses a motionless person for a moment must not clear the
+  // room, so "empty" only becomes the latest word once it has outlasted the
+  // last sighting by HOLD seconds. A responder's walk-through needs no hold.
+  const held = (c) => c.kind === 'search' || sight.age - c.age >= P.HOLD;
+  if (sight && (!clear || !held(clear))) {
     const count = Math.max(sight.count ?? 1, doorsFresh ? doors.count : 0);
     if (sight.age < P.FRESH) {
       return {
@@ -102,14 +110,14 @@ export function roomBelief(rep, roomId, now, P = PARAMS) {
     // A responder who walked the room is stronger evidence than a sensor, and
     // overrides door counters that have drifted. It still decays.
     if (searched && (!sight || searched.age < sight.age)) {
-      const held = decay(searched.age / 3, P);
-      if (held > 0) {
+      const trustSearch = decay(searched.age / 3, E);
+      if (trustSearch > 0) {
         return {
           ...base,
           state: 'empty',
           count: 0,
           age: searched.age,
-          conf: Math.round(100 * (searched.conf ?? 0.95) * held),
+          conf: Math.round(100 * (searched.conf ?? 0.95) * trustSearch),
           why: `Searched by ${who(searched.writer)} ${Math.round(searched.age)} s ago`,
         };
       }
@@ -124,11 +132,11 @@ export function roomBelief(rep, roomId, now, P = PARAMS) {
         why: `Doors count ${doors.count} inside, ${who(clear.writer)} sees none`,
       };
     }
-    const trust = decay(clear.age, P);
+    const trust = decay(clear.age, E);
     if (trust === 0) {
       return { ...base, state: 'unknown', count: null, age: clear.age, conf: 0, why: `Last reading ${Math.round(clear.age)} s old` };
     }
-    if (!doorsFresh) {
+    if (!doors.known || doors.age >= P.EMPTY_STALE) {
       return { ...base, state: 'unknown', count: null, age: clear.age, conf: 0, why: 'Sensor sees none, door counters silent' };
     }
     return {
@@ -136,7 +144,7 @@ export function roomBelief(rep, roomId, now, P = PARAMS) {
       state: 'empty',
       count: 0,
       age: clear.age,
-      conf: Math.round(100 * (clear.conf ?? 0.9) * trust * decay(doors.age, P)),
+      conf: Math.round(100 * (clear.conf ?? 0.9) * trust * decay(doors.age, E)),
       why: `${who(clear.writer)} and doors agree`,
     };
   }

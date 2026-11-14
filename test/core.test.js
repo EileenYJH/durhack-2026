@@ -130,7 +130,18 @@ test('a responder search overrides drifted door counters, then decays', () => {
   const b = roomBelief(rep, 'D', 3);
   assert.equal(b.state, 'empty');
   assert.match(b.why, /Searched by Responder 1/);
-  assert.notEqual(roomBelief(rep, 'D', 2 + PARAMS.STALE * 3 + 1).state, 'empty');
+  assert.notEqual(roomBelief(rep, 'D', 2 + PARAMS.EMPTY_STALE * 3 + 1).state, 'empty');
+});
+
+test('a brief sensor miss does not clear a room where someone was just seen', () => {
+  const rep = createReplica('n');
+  allDoors(rep, 10);
+  writeReport(rep, 'A', 'room-A', { state: 'still', count: 1, kind: 'sensor' }, 5);
+  writeReport(rep, 'A', 'room-A2', { state: 'empty', count: 0, kind: 'sensor' }, 9);
+  assert.notEqual(roomBelief(rep, 'A', 10).state, 'empty');
+  writeReport(rep, 'A', 'room-A2', { state: 'empty', count: 0, kind: 'sensor' }, 5 + PARAMS.HOLD + 1);
+  allDoors(rep, 5 + PARAMS.HOLD + 1);
+  assert.equal(roomBelief(rep, 'A', 5 + PARAMS.HOLD + 1).state, 'empty');
 });
 
 test('no records means unknown everywhere, never empty', () => {

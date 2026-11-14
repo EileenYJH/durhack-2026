@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Roll Call live node</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="src/ui/style.css">
+</head>
+<body class="live">
+<header class="bar">
+  <div class="brand"><span class="mark" aria-hidden="true"></span><h1>Roll Call</h1></div>
+  <div class="stat"><span class="k">This device</span><span class="v" id="me">Not joined</span></div>
+  <div class="stat"><span class="k">Nodes heard</span><span class="v" id="peers">0</span></div>
+  <div class="stat"><span class="k">Believed inside</span><span class="v" id="inside">0</span></div>
+  <div class="controls">
+    <a class="navlink" href="index.html">Simulation</a>
+    <button id="radio" aria-pressed="false" disabled>Radio on</button>
+    <button id="forget" disabled>Reset this node</button>
+  </div>
+</header>
+
+<main class="live-main">
+  <section class="join" id="join">
+    <h2>Join the mesh as</h2>
+    <form id="join-form">
+      <div class="field">
+        <label for="mesh">Mesh code</label>
+        <input id="mesh" name="mesh" value="demo" autocomplete="off" required>
+        <p class="help">Devices with the same code hear each other.</p>
+      </div>
+      <fieldset>
+        <legend>Role</legend>
+        <label class="radio"><input type="radio" name="role" value="board" checked> Command board <span>shows the building, no camera</span></label>
+        <label class="radio"><input type="radio" name="role" value="door"> Door camera <span>counts people crossing a doorway</span></label>
+        <label class="radio"><input type="radio" name="role" value="room"> Room camera <span>reports who is in a room and whether they are moving</span></label>
+      </fieldset>
+      <div class="field" id="place-field" hidden>
+        <label for="place">Where is this camera?</label>
+        <select id="place" name="place"></select>
+        <p class="help" id="place-help"></p>
+      </div>
+      <p class="error" id="join-error" role="alert"></p>
+      <button class="primary" type="submit">Join</button>
+    </form>
+  </section>
+
+  <section class="cam" id="cam" hidden>
+    <h2 id="cam-title">Camera</h2>
+    <div class="stage">
+      <video id="video" playsinline muted></video>
+      <canvas id="overlay"></canvas>
+    </div>
+    <p class="readout" id="readout">Starting the camera</p>
+    <div class="brief-row" id="door-tools" hidden>
+      <button id="flip">Swap direction</button>
+      <button id="zero">Zero the counter</button>
+    </div>
+  </section>
+
+  <section class="plan" id="plan" hidden>
+    <div class="plan-head"><h2>Ground floor, as this device believes it</h2></div>
+    <svg id="map" viewBox="-120 -10 1180 620" role="img" aria-label="Floor plan"></svg>
+    <p class="hint">Rooms with no node reporting stay unknown. They are never shown as empty.</p>
+  </section>
+
+  <aside class="board" id="board" hidden>
+    <h2>Search order</h2>
+    <p id="brief" class="brief"></p>
+    <div class="brief-row"><button id="speak">Read the brief</button><span id="brief-source" class="source">Rule-based brief</span></div>
+    <ol id="tally" class="tally"></ol>
+    <h2 class="sub">Nodes heard</h2>
+    <ul id="peer-list" class="peer-list"></ul>
+  </aside>
+</main>
+
+<script type="module" src="src/live/live.js"></script>
+</body>
+</html>

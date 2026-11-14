@@ -1,0 +1,133 @@
+// Roll Call server. No dependencies: node server.js
+//
+// It does three small jobs:
+//   1. serves the static files;
+//   2. forwards mesh messages between devices (it stores nothing and decides
+//      nothing: every device keeps its own state and merges for itself);
+//   3. keeps the Gemini and ElevenLabs keys off the client.
+
+import http from 'node:http';
+import { readFile } from 'node:fs/promises';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+try {
+  process.loadEnvFile();
+} catch {
+  // no .env file: the AI brief and voice fall back to the built-in ones
+}
+
+const ROOT = path.dirname(fileURLToPath(import.meta.url));
+const PORT = Number(process.env.PORT ?? 8200);
+const GEMINI_KEY = process.env.GEMINI_API_KEY;
+const GEMINI_MODEL = process.env.GEMINI_MODEL ?? 'gemini-2.5-flash';
+const ELEVEN_KEY = process.env.ELEVENLABS_API_KEY;
+const ELEVEN_VOICE = process.env.ELEVENLABS_VOICE_ID ?? 'JBFqnCBsd6RMkjVDRZzb';
+const ELEVEN_MODEL = process.env.ELEVENLABS_MODEL ?? 'eleven_flash_v2_5';
+
+const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.svg': 'image/svg+xml', '.md': 'text/plain' };
+const meshes = new Map(); // mesh code -> Set of { id, res }
+
+const BRIEF_RULES = `You write the radio brief for a fire incident commander from sensor data.
+Rules:
+- Use only the data given. Never add facts, names, causes or advice that are not in it.
+- Lead with the room to search first and why. Then the next rooms in order.
+- Say "confirmed empty" only for rooms whose state is exactly "Confirmed empty".
+- Name every room whose state is "Unknown" and say it is unknown. Never imply it is empty.
+- Give counts as counts of people. Mention how old a reading is when it is over 10 seconds.
+- Plain spoken English, no lists, no markdown, at most 70 words.`;
+
+function send(res, status, body, type = 'application/json') {
+  res.writeHead(status, { 'content-type': type, 'cache-control': 'no-store' });
+  res.end(typeof body === 'string' || Buffer.isBuffer(body) ? body : JSON.stringify(body));
+}
+
+async function readBody(req, limit = 400_000) {
+  const chunks = [];
+  let size = 0;
+  for await (const chunk of req) {
+    size += chunk.length;
+    if (size > limit) throw new Error('too large');
+    chunks.push(chunk);
+  }
+  return Buffer.concat(chunks).toString('utf8');
+}
+
+async function brief(req, res) {
+  if (!GEMINI_KEY) return send(res, 503, { error: 'no GEMINI_API_KEY set' });
+  const data = await readBody(req);
+  const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', 'x-goog-api-key': GEMINI_KEY },
+    body: JSON.stringify({
+      systemInstruction: { parts: [{ text: BRIEF_RULES }] },
+      contents: [{ role: 'user', parts: [{ text: data }] }],
+      generationConfig: { temperature: 0.2, maxOutputTokens: 800 },
+    }),
+  });
+  if (!r.ok) return send(res, 502, { error: `Gemini returned ${r.status}`, detail: (await r.text()).slice(0, 300) });
+  const out = await r.json();
+  const text = out.candidates?.[0]?.content?.parts?.map((p) => p.text ?? '').join('').trim();
+  if (!text) return send(res, 502, { error: 'Gemini returned no text' });
+  send(res, 200, { text, model: GEMINI_MODEL });
+}
+
+async function speak(req, res) {
+  if (!ELEVEN_KEY) return send(res, 503, { error: 'no ELEVENLABS_API_KEY set' });
+  const { text } = JSON.parse(await readBody(req));
+  const r = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${ELEVEN_VOICE}?output_format=mp3_44100_128`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', 'xi-api-key': ELEVEN_KEY },
+    body: JSON.stringify({ text: String(text).slice(0, 800), model_id: ELEVEN_MODEL }),
+  });
+  if (!r.ok) return send(res, 502, { error: `ElevenLabs returned ${r.status}`, detail: (await r.text()).slice(0, 300) });
+  send(res, 200, Buffer.from(await r.arrayBuffer()), 'audio/mpeg');
+}
+
+function stream(req, res, mesh, id) {
+  res.writeHead(200, { 'content-type': 'text/event-stream', 'cache-control': 'no-store', connection: 'keep-alive', 'x-accel-buffering': 'no' });
+  res.write(': joined\n\n');
+  const peer = { id, res };
+  if (!meshes.has(mesh)) meshes.set(mesh, new Set());
+  meshes.get(mesh).add(peer);
+  const beat = setInterval(() => res.write(': beat\n\n'), 15000);
+  req.on('close', () => {
+    clearInterval(beat);
+    meshes.get(mesh)?.delete(peer);
+  });
+}
+
+async function relay(req, res, mesh, id) {
+  const body = await readBody(req);
+  JSON.parse(body); // reject anything that is not JSON
+  for (const peer of meshes.get(mesh) ?? []) {
+    if (peer.id !== id) peer.res.write(`data: ${body}\n\n`);
+  }
+  send(res, 204, '');
+}
+
+const server = http.createServer(async (req, res) => {
+  try {
+    const url = new URL(req.url, 'http://x');
+    const mesh = (url.searchParams.get('mesh') ?? 'demo').slice(0, 40);
+    const id = (url.searchParams.get('id') ?? '').slice(0, 60);
+    if (url.pathname === '/mesh/stream' && req.method === 'GET') return stream(req, res, mesh, id);
+    if (url.pathname === '/mesh/send' && req.method === 'POST') return await relay(req, res, mesh, id);
+    if (url.pathname === '/api/status') return send(res, 200, { gemini: Boolean(GEMINI_KEY), elevenlabs: Boolean(ELEVEN_KEY), peers: meshes.get(mesh)?.size ?? 0 });
+    if (url.pathname === '/api/brief' && req.method === 'POST') return await brief(req, res);
+    if (url.pathname === '/api/speak' && req.method === 'POST') return await speak(req, res);
+
+    const rel = decodeURIComponent(url.pathname === '/' ? '/index.html' : url.pathname);
+    const file = path.join(ROOT, rel);
+    if (!file.startsWith(ROOT + path.sep) || rel.includes('/.')) return send(res, 403, 'Forbidden', 'text/plain');
+    send(res, 200, await readFile(file), MIME[path.extname(file)] ?? 'application/octet-stream');
+  } catch (err) {
+    if (res.headersSent) return res.end();
+    send(res, err.code === 'ENOENT' ? 404 : 500, err.code === 'ENOENT' ? 'Not found' : 'Server error', 'text/plain');
+  }
+});
+
+server.listen(PORT, () => {
+  console.log(`Roll Call on http://localhost:${PORT}  (simulation: /, live nodes: /live.html)`);
+  console.log(`Gemini brief: ${GEMINI_KEY ? 'on' : 'off'}   ElevenLabs voice: ${ELEVEN_KEY ? 'on' : 'off'}`);
+});

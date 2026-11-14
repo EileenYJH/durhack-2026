@@ -2,79 +2,22 @@ import { ROOMS, DOORS, ROOM_IDS, DOOR_IDS } from '../core/building.js';
 import { buildingBelief, headcount, STATE_LABEL } from '../core/belief.js';
 import { priority } from '../core/assign.js';
 import { createSim, CUT_X } from '../sim/sim.js';
+import { drawStatic, FILL, shown } from './plan.js';
+import { ruleBrief, deliverBrief } from './brief.js';
 
 const $ = (id) => document.getElementById(id);
 const NS = 'http://www.w3.org/2000/svg';
-const FILL = {
-  still: 'url(#p-still)',
-  occupied: 'var(--fire-soft)',
-  possible: 'url(#p-possible)',
-  unknown: 'url(#p-unknown)',
-  empty: 'var(--go-soft)',
-};
 
 let sim = createSim(7);
 let viewer = 'POST';
 let speed = 1;
 let paused = false;
 let showTruth = true;
+let latest = null;
+let heldUntil = 0;
+const briefHeld = () => performance.now() < heldUntil;
 
-// ---- static drawing ---------------------------------------------------------
 const map = $('map');
-
-function doorMarkup(id) {
-  const d = DOORS[id];
-  const vertical = id === 'dAB' || id === 'dW' || id === 'dX';
-  const g = 18;
-  if (vertical) {
-    return `<line class="gap" x1="${d.x}" y1="${d.y - g}" x2="${d.x}" y2="${d.y + g}"/>
-      <path class="leaf" d="M${d.x} ${d.y - g} l${2 * g} 0 M${d.x + 2 * g} ${d.y - g} a${2 * g} ${2 * g} 0 0 1 ${-2 * g} ${2 * g}"/>`;
-  }
-  const up = d.y === 250 ? -1 : 1;
-  return `<line class="gap" x1="${d.x - g}" y1="${d.y}" x2="${d.x + g}" y2="${d.y}"/>
-    <path class="leaf" d="M${d.x - g} ${d.y} l0 ${up * 2 * g} M${d.x - g} ${d.y + up * 2 * g} a${2 * g} ${2 * g} 0 0 ${up < 0 ? 1 : 0} ${2 * g} ${-up * 2 * g}"/>`;
-}
-
-function drawStatic() {
-  const rooms = ROOM_IDS.map((id) => {
-    const r = ROOMS[id];
-    return `<rect class="room-fill" id="fill-${id}" x="${r.x}" y="${r.y}" width="${r.w}" height="${r.h}"/>`;
-  }).join('');
-  const walls = ROOM_IDS.map((id) => {
-    const r = ROOMS[id];
-    return `<rect class="wall" x="${r.x}" y="${r.y}" width="${r.w}" height="${r.h}"/>`;
-  }).join('');
-  const labels = ROOM_IDS.map((id) => {
-    const r = ROOMS[id];
-    if (id === 'COR') {
-      return `<text class="room-name" x="${r.x + 300}" y="${r.y + 24}">${r.name}</text>
-        <text class="room-state" id="state-${id}" x="${r.x + 300}" y="${r.y + 42}"></text>
-        <text class="room-count" id="count-${id}" x="${r.x + 430}" y="${r.y + 62}" style="font-size:40px"></text>`;
-    }
-    return `<text class="room-name" x="${r.x + 14}" y="${r.y + 28}">${r.name}</text>
-      <text class="room-state" id="state-${id}" x="${r.x + 14}" y="${r.y + 47}"></text>
-      <text class="room-count" id="count-${id}" x="${r.x + r.w - 16}" y="${r.y + r.h - 16}" text-anchor="end"></text>`;
-  }).join('');
-  map.innerHTML = `
-    <defs>
-      <pattern id="p-still" width="7" height="7" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
-        <rect width="7" height="7" style="fill:var(--fire-soft)"/><rect width="4" height="7" style="fill:var(--fire)"/>
-      </pattern>
-      <pattern id="p-possible" width="11" height="11" patternUnits="userSpaceOnUse" patternTransform="rotate(-45)">
-        <rect width="11" height="11" style="fill:var(--hazard-soft)"/><rect width="5" height="11" style="fill:var(--hazard)"/>
-      </pattern>
-      <pattern id="p-unknown" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
-        <rect width="1.5" height="6" style="fill:var(--hatch)"/>
-      </pattern>
-    </defs>
-    <rect class="assembly" x="-112" y="372" width="104" height="24"/>
-    <text class="assembly-text" x="-60" y="389" text-anchor="middle">ASSEMBLY</text>
-    <rect class="assembly" x="950" y="372" width="104" height="24"/>
-    <text class="assembly-text" x="1002" y="389" text-anchor="middle">ASSEMBLY</text>
-    ${rooms}${walls}${DOOR_IDS.map(doorMarkup).join('')}${labels}
-    <text class="fire-tag" id="fire-tag" x="0" y="0"></text>
-    <g id="live"></g>`;
-}
 
 // ---- per-frame drawing --------------------------------------------------------
 function nodeMarkup(n) {
@@ -111,7 +54,6 @@ function drawLive() {
 
 // ---- panels -------------------------------------------------------------------
 const clock = (t) => `${String(Math.floor(t / 60)).padStart(2, '0')}:${String(Math.floor(t % 60)).padStart(2, '0')}`;
-const shown = (b) => (b.count === null || b.count === undefined ? '?' : String(b.count));
 
 function drawPanels() {
   const node = sim.node(viewer);
@@ -153,7 +95,8 @@ function drawPanels() {
       </li>`;
     })
     .join('');
-  $('brief').textContent = brief(order, hc);
+  latest = { belief, hc, alarm: sim.alarm, viewer: node.label };
+  if (!briefHeld()) $('brief').textContent = ruleBrief(belief, hc, sim.alarm);
 
   // who believes what
   const cols = [...sim.nodes].sort((a, b) => rankKind(a) - rankKind(b));
@@ -192,18 +135,6 @@ function calm(belief) {
 const rankKind = (n) => ({ post: 0, responder: 1, room: 2, door: 3 })[n.kind];
 const short = (n) => (n.kind === 'post' ? 'Post' : n.kind === 'responder' ? n.id : n.kind === 'room' ? ROOMS[n.room].name : n.label);
 
-function brief(order, hc) {
-  const top = order.find((o) => o.p > 0 && o.id !== 'COR') ?? order.find((o) => o.p > 0);
-  if (!sim.alarm) return `Normal operation. ${hc.low === hc.high ? hc.low : `${hc.low} to ${hc.high}`} people believed inside.`;
-  if (!top) return 'Every room is confirmed empty.';
-  const name = ROOMS[top.id].name;
-  const b = top.b;
-  if (b.state === 'still') return `Search ${name} first. ${b.count} not moving, seen ${Math.round(b.age)} s ago.`;
-  if (b.state === 'occupied') return `${name}: ${b.count} moving inside, seen ${Math.round(b.age)} s ago.`;
-  if (b.state === 'possible') return `Check ${name}. ${b.why}.`;
-  return `No reliable reading from ${hc.unknown} ${hc.unknown === 1 ? 'room' : 'rooms'}. Verify ${name} first.`;
-}
-
 // ---- controls -----------------------------------------------------------------
 $('alarm').addEventListener('click', () => sim.raiseAlarm());
 $('cut').addEventListener('click', (e) => {
@@ -231,6 +162,14 @@ $('reset').addEventListener('click', () => {
   $('cut').textContent = 'Cut east link';
   drawPanels();
 });
+$('speak').addEventListener('click', async (e) => {
+  const btn = e.currentTarget;
+  btn.disabled = true;
+  heldUntil = performance.now() + 60000;
+  const done = await deliverBrief(latest, $('brief'), $('brief-source'));
+  heldUntil = performance.now() + Math.max(4000, done * 1000);
+  btn.disabled = false;
+});
 $('show-truth').addEventListener('change', (e) => {
   showTruth = e.currentTarget.checked;
 });
@@ -249,7 +188,7 @@ map.addEventListener('keydown', (e) => {
 });
 
 // ---- loop ---------------------------------------------------------------------
-drawStatic();
+drawStatic(map);
 drawPanels();
 let last = performance.now();
 let owed = 0;

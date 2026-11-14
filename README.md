@@ -23,22 +23,29 @@ Full notes in [docs/challenges.md](docs/challenges.md). One-line summary:
 
 ## Run it
 
-No build step. Serve the folder and open it:
+No build step and no dependencies (Node 22 or newer):
 
 ```bash
-python -m http.server 8200
+node server.js
 ```
 
-Then open http://localhost:8200. Tests: `node --test`.
+- http://localhost:8200 is the simulation: 19 nodes, each with its own copy of the state, on a network you can cut.
+- http://localhost:8200/live.html turns the device into a real node. Open it on several devices or windows with the same mesh code. Roles: command board, door camera (counts people crossing a doorway), room camera (reports presence and whether people are moving).
+- Tests: `node --test`. Safety measurement: `node scripts/evaluate.js 200`. Results are in [docs/evaluation.md](docs/evaluation.md).
 
-What you see is a simulation: people, sensors and the radio network are simulated, and every node keeps its own separate copy of the state. Select any node on the plan to see the building as that node believes it.
+Optional keys go in `.env` (copy `.env.example`): `GEMINI_API_KEY` for the written brief, `ELEVENLABS_API_KEY` for the voice. Without them the brief is rule-based and the browser's own voice reads it.
+
+Phones need HTTPS to use their camera, so a phone camera node needs the server behind an HTTPS address (a tunnel or a hosted copy). A laptop on localhost works as it is.
 
 ## Layout
 
 - `docs/` notes, brief, pitch
 - `src/core/` replicated state, belief rules, responder assignment (tested)
 - `src/sim/` simulated people, sensors and network
-- `src/ui/` the command board
+- `src/live/` real device nodes: mesh transport, camera tracker
+- `src/ui/` the command board and the brief
+- `server.js` static files, mesh relay, Gemini and ElevenLabs proxies
+- `scripts/evaluate.js` randomised safety measurement
 
 ## Links
 
