@@ -3,7 +3,7 @@ import { buildingBelief, headcount, STATE_LABEL } from '../core/belief.js';
 import { priority } from '../core/assign.js';
 import { createSim } from '../sim/sim.js';
 import { drawStatic, FILL, shown } from './plan.js';
-import { ruleBrief, deliverBrief, voice } from './brief.js';
+import { ruleBrief, deliverBrief, voice, aiDirections } from './brief.js';
 import { directions, routePoints } from '../core/directions.js';
 
 const $ = (id) => document.getElementById(id);
@@ -193,7 +193,8 @@ $('guide').addEventListener('submit', async (e) => {
   shownRoute = steps.some((t) => t.startsWith('There is no route')) ? null : routePoints(from, to, { avoid });
   $('g-text').textContent = steps.join(' ');
   $('g-go').disabled = true;
-  await voice(steps.join(' '));
+  const spoken = await aiDirections(steps);
+  await voice(spoken);
   $('g-go').disabled = false;
 });
 $('show-truth').addEventListener('change', (e) => {

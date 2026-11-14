@@ -4,12 +4,13 @@
 //   1. serves the static files;
 //   2. forwards mesh messages between devices (it stores nothing and decides
 //      nothing: every device keeps its own state and merges for itself);
-//   3. keeps the Gemini and ElevenLabs keys off the client.
+//   3. keeps the Gemini and ElevenLabs credentials off the client.
 
 import http from 'node:http';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { createGemini } from './src/server/gemini.js';
 
 try {
   process.loadEnvFile();
@@ -31,8 +32,8 @@ function limited(req, limit = 30, windowMs = 60_000) {
   hits.set(ip, recent);
   return recent.length > limit;
 }
-const GEMINI_KEY = process.env.GEMINI_API_KEY;
-const GEMINI_MODEL = process.env.GEMINI_MODEL ?? 'gemini-2.5-flash';
+
+const gemini = createGemini();
 const ELEVEN_KEY = process.env.ELEVENLABS_API_KEY;
 const ELEVEN_VOICE = process.env.ELEVENLABS_VOICE_ID ?? 'JBFqnCBsd6RMkjVDRZzb';
 const ELEVEN_MODEL = process.env.ELEVENLABS_MODEL ?? 'eleven_flash_v2_5';
@@ -57,38 +58,20 @@ Set hall to true for corridors, lobbies and stairwells that people pass through;
 Doors: {"id": "d1", "a": roomId, "b": roomId or "OUT", "x": number, "y": number}. The point x,y lies on the wall the two rooms share. For a building exit, b is "OUT" and the point lies on the outer wall.
 Return exactly: {"name": string, "rooms": [...], "doors": [...]}. If you cannot read a plan in the picture, return {"name": "", "rooms": [], "doors": []}.`;
 
+const DIRECTIONS_RULES = `You rewrite turn-by-turn fire evacuation directions so they sound natural when spoken to a responder over a radio earpiece.
+Input: literal steps such as "Turn left and head north along the corridor. Room 102 is the 2nd door on your right."
+Rules:
+- Say exactly the same thing. Keep every room name, every left or right, every compass direction (north, south, east, west), every door number such as "2nd", and every mention of an exit or entrance. Use each of those words the same number of times as the input.
+- You may change only the phrasing: contractions, a calmer rhythm, joining short sentences.
+- Never add or remove a room, turn, door or exit. Never add advice, warnings or hazards.
+- If the input says there is no route, say that there is no route that avoids the fire.
+- No markdown, no lists, plain spoken English, at most 120 words.`;
+
 function extractJson(text) {
   const start = text.indexOf('{');
   const end = text.lastIndexOf('}');
   if (start < 0 || end <= start) throw new Error('no JSON in the reply');
   return JSON.parse(text.slice(start, end + 1));
-}
-
-async function layout(req, res) {
-  if (!GEMINI_KEY) return send(res, 503, { error: 'Photo import needs GEMINI_API_KEY in .env' });
-  const { image } = JSON.parse(await readBody(req, 8_000_000));
-  const m = /^data:(image\/(?:jpeg|png|webp));base64,([A-Za-z0-9+/=]+)$/.exec(image ?? '');
-  if (!m) return send(res, 400, { error: 'Send a JPEG, PNG or WebP image.' });
-  const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json', 'x-goog-api-key': GEMINI_KEY },
-    body: JSON.stringify({
-      systemInstruction: { parts: [{ text: LAYOUT_RULES }] },
-      contents: [{ role: 'user', parts: [{ text: 'Read this floor plan.' }, { inline_data: { mime_type: m[1], data: m[2] } }] }],
-      generationConfig: { temperature: 0.1, maxOutputTokens: 8000, responseMimeType: 'application/json' },
-    }),
-  });
-  if (!r.ok) return send(res, 502, { error: `Gemini returned ${r.status}`, detail: (await r.text()).slice(0, 300) });
-  const out = await r.json();
-  const text = out.candidates?.[0]?.content?.parts?.map((p) => p.text ?? '').join('') ?? '';
-  let parsed;
-  try {
-    parsed = extractJson(text);
-  } catch {
-    return send(res, 502, { error: 'Gemini did not return a layout' });
-  }
-  if (!parsed.rooms?.length) return send(res, 422, { error: 'No floor plan found in that picture.' });
-  send(res, 200, { layout: parsed, model: GEMINI_MODEL });
 }
 
 function send(res, status, body, type = 'application/json') {
@@ -107,23 +90,52 @@ async function readBody(req, limit = 400_000) {
   return Buffer.concat(chunks).toString('utf8');
 }
 
+// A Gemini failure is reported as 503 when it is a setup problem (nothing to
+// retry) and 502 when Google itself refused or failed.
+const geminiFailure = (res, err) => send(res, gemini.ready() ? 502 : 503, { error: err.message });
+
+async function layout(req, res) {
+  const { image } = JSON.parse(await readBody(req, 8_000_000));
+  const m = /^data:(image\/(?:jpeg|png|webp));base64,([A-Za-z0-9+/=]+)$/.exec(image ?? '');
+  if (!m) return send(res, 400, { error: 'Send a JPEG, PNG or WebP image.' });
+  try {
+    const text = await gemini.generate(LAYOUT_RULES, [{ text: 'Read this floor plan.' }, { inlineData: { mimeType: m[1], data: m[2] } }], {
+      temperature: 0.1,
+      maxTokens: 8000,
+      responseMimeType: 'application/json',
+    });
+    let parsed;
+    try {
+      parsed = extractJson(text);
+    } catch {
+      return send(res, 502, { error: 'Gemini did not return a layout' });
+    }
+    if (!parsed.rooms?.length) return send(res, 422, { error: 'No floor plan found in that picture.' });
+    send(res, 200, { layout: parsed, model: gemini.model });
+  } catch (err) {
+    geminiFailure(res, err);
+  }
+}
+
+async function directions(req, res) {
+  const { steps } = JSON.parse(await readBody(req));
+  if (!Array.isArray(steps) || !steps.length || steps.length > 40 || !steps.every((s) => typeof s === 'string')) return send(res, 400, { error: 'Send { steps: [strings] }' });
+  try {
+    const text = await gemini.generate(DIRECTIONS_RULES, [{ text: steps.join(' ') }], { temperature: 0.3, maxTokens: 400 });
+    send(res, 200, { text, model: gemini.model });
+  } catch (err) {
+    geminiFailure(res, err);
+  }
+}
+
 async function brief(req, res) {
-  if (!GEMINI_KEY) return send(res, 503, { error: 'no GEMINI_API_KEY set' });
   const data = await readBody(req);
-  const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json', 'x-goog-api-key': GEMINI_KEY },
-    body: JSON.stringify({
-      systemInstruction: { parts: [{ text: BRIEF_RULES }] },
-      contents: [{ role: 'user', parts: [{ text: data }] }],
-      generationConfig: { temperature: 0.2, maxOutputTokens: 800 },
-    }),
-  });
-  if (!r.ok) return send(res, 502, { error: `Gemini returned ${r.status}`, detail: (await r.text()).slice(0, 300) });
-  const out = await r.json();
-  const text = out.candidates?.[0]?.content?.parts?.map((p) => p.text ?? '').join('').trim();
-  if (!text) return send(res, 502, { error: 'Gemini returned no text' });
-  send(res, 200, { text, model: GEMINI_MODEL });
+  try {
+    const text = await gemini.generate(BRIEF_RULES, [{ text: data }], { temperature: 0.2, maxTokens: 800 });
+    send(res, 200, { text, model: gemini.model });
+  } catch (err) {
+    geminiFailure(res, err);
+  }
 }
 
 async function speak(req, res) {
@@ -167,11 +179,12 @@ const server = http.createServer(async (req, res) => {
     const id = (url.searchParams.get('id') ?? '').slice(0, 60);
     if (url.pathname === '/mesh/stream' && req.method === 'GET') return stream(req, res, mesh, id);
     if (url.pathname === '/mesh/send' && req.method === 'POST') return await relay(req, res, mesh, id);
-    if (url.pathname === '/api/status') return send(res, 200, { gemini: Boolean(GEMINI_KEY), elevenlabs: Boolean(ELEVEN_KEY), peers: meshes.get(mesh)?.size ?? 0 });
-    if (['/api/brief', '/api/speak', '/api/layout'].includes(url.pathname) && limited(req)) return send(res, 429, { error: 'Too many requests. Wait a minute.' });
+    if (url.pathname === '/api/status') return send(res, 200, { gemini: gemini.ready(), provider: gemini.provider, elevenlabs: Boolean(ELEVEN_KEY), peers: meshes.get(mesh)?.size ?? 0 });
+    if (['/api/brief', '/api/speak', '/api/layout', '/api/directions'].includes(url.pathname) && limited(req)) return send(res, 429, { error: 'Too many requests. Wait a minute.' });
     if (url.pathname === '/api/brief' && req.method === 'POST') return await brief(req, res);
     if (url.pathname === '/api/speak' && req.method === 'POST') return await speak(req, res);
     if (url.pathname === '/api/layout' && req.method === 'POST') return await layout(req, res);
+    if (url.pathname === '/api/directions' && req.method === 'POST') return await directions(req, res);
 
     const rel = decodeURIComponent(url.pathname === '/' ? '/index.html' : url.pathname);
     const file = path.join(ROOT, rel);
@@ -185,5 +198,5 @@ const server = http.createServer(async (req, res) => {
 
 server.listen(PORT, HOST, () => {
   console.log(`Roll Call on http://localhost:${PORT}  (simulation: /, live nodes: /live.html)`);
-  console.log(`Gemini brief: ${GEMINI_KEY ? 'on' : 'off'}   ElevenLabs voice: ${ELEVEN_KEY ? 'on' : 'off'}`);
+  console.log(`Gemini: ${gemini.ready() ? `on, ${gemini.describe()}` : `off (${gemini.problem()})`}   ElevenLabs voice: ${ELEVEN_KEY ? 'on' : 'off'}`);
 });

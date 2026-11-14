@@ -33,6 +33,7 @@ fi
 id rollcall >/dev/null 2>&1 || useradd --system --home "$APP" --shell /usr/sbin/nologin rollcall
 chown -R rollcall:rollcall "$APP"
 [ -f "$APP/.env" ] && chmod 600 "$APP/.env"
+for f in "$APP"/service-account*.json "$APP"/*-key.json; do [ -f "$f" ] && chmod 600 "$f"; done || true
 
 cat > /etc/systemd/system/rollcall.service <<UNIT
 [Unit]

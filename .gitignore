@@ -3,3 +3,9 @@ __pycache__/
 .venv/
 node_modules/
 .DS_Store
+
+# Google Cloud credentials must never be committed
+service-account*.json
+*-key.json
+vertex-key*.json
+application_default_credentials.json

@@ -5,6 +5,7 @@
 import { ROOMS, ROOM_IDS, isHall } from '../core/building.js';
 import { STATE_LABEL } from '../core/belief.js';
 import { priority } from '../core/assign.js';
+import { faithful } from '../core/faithful.js';
 
 const ranked = (belief) =>
   ROOM_IDS.filter((id) => !isHall(id))
@@ -116,4 +117,24 @@ export async function deliverBrief(latest, textEl, sourceEl) {
   const spokenBy = await voice(text);
   sourceEl.textContent = `${source}. Read by ${spokenBy}.`;
   return text.split(/\s+/).length / 2.4;
+}
+
+// Gemini may smooth the wording of the directions, but only if every turn,
+// compass direction, door number and room name survives unchanged. Anything
+// else is discarded and the literal steps are spoken.
+export async function aiDirections(steps) {
+  const literal = steps.join(' ');
+  if (steps.some((t) => t.startsWith('There is no route'))) return literal;
+  try {
+    const r = await fetch('/api/directions', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ steps }) });
+    if (r.ok) {
+      const out = await r.json();
+      const check = faithful(literal, out.text, ROOM_IDS.map((id) => ROOMS[id].name));
+      if (check.ok) return out.text;
+      console.warn(`Gemini's rewrite of the directions was discarded: ${check.why}`);
+    }
+  } catch {
+    // no server or no network: speak the literal steps
+  }
+  return literal;
 }
