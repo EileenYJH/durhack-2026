@@ -1,6 +1,6 @@
 # Sponsor challenges
 
-Source: opening ceremony slides. The main DurHack theme reveal is an image on the slides, so it is not captured here. Devpost returned 403 to an automated fetch, so rules, judging and submission details still need adding by hand.
+Source: opening ceremony slides. Devpost returned 403 to an automated fetch, so rules, judging and submission details still need adding by hand.
 
 ## Neptune North: "Actors work better together"
 Systems collaborating on a shared goal must keep working when communication is unreliable or lost, with no central hub.
@@ -32,3 +32,9 @@ Improve the world by connecting things that usually aren't. Prize: Raspberry Pi 
 
 ## Logistics
 Event 14-15 Nov. Meals on wristbands, sleeping space TLC123, emergency 999 (DH1 3LS). Workshops: SGX FX 13:15, P&G 13:15, QRT 14:15, Marshall Wace 15:15, MLH Copilot 18:00.
+
+## QRT
+Two main challenges: Tagged (invent a physical language that encodes digital information; build an encoder that turns a three-word phrase into a physical object and a decoder that recovers it) and Spray n' Tag CTF (cybersecurity capture the flag). Mini-challenges throughout with extra prizes. Prizes per challenge: 1st AirPods Pro, 2nd poker sets, 3rd £100 keyboard voucher, for every team member. Details are on the Discord.
+
+## Overall theme: Composition
+Explore art, music and tech, idea mixing and new combinations. Overall prizes: 1st, 2nd, Spirit of the Dino. Judging: creativity and innovation, technical competence and execution, research and learning, polish and completion. Teams are limited to four people.
