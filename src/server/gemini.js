@@ -13,15 +13,20 @@
 //                   Tokens last about an hour and are reused until just before
 //                   they expire.
 
-import { execFile } from 'node:child_process';
+import { exec } from 'node:child_process';
 import { createSign } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 
 const SCOPE = 'https://www.googleapis.com/auth/cloud-platform';
 
+// Newer Gemini models spend part of the output limit on internal reasoning
+// before they write anything. This much is added to every request so the
+// visible answer is not cut off; the prompts themselves keep answers short.
+const REASONING_HEADROOM = 3000;
+
 export function createGemini(env = process.env, endpoints = {}, fetchImpl = fetch) {
   const provider = (env.GEMINI_PROVIDER ?? 'aistudio').toLowerCase();
-  const model = env.GEMINI_MODEL ?? 'gemini-2.5-flash';
+  const model = env.GEMINI_MODEL ?? 'gemini-3.5-flash';
   const project = env.GCP_PROJECT;
   const location = env.GCP_LOCATION ?? 'us-central1';
   const key = provider === 'vertex-express' ? (env.VERTEX_API_KEY ?? env.GEMINI_API_KEY) : env.GEMINI_API_KEY;
@@ -49,18 +54,32 @@ export function createGemini(env = process.env, endpoints = {}, fetchImpl = fetc
     return { token: out.access_token, seconds: out.expires_in ?? 3600 };
   }
 
-  function gcloudToken() {
+  // `gcloud` on the PATH, or where the Windows installer puts it for one user.
+  // A terminal opened before the install does not have the new PATH yet.
+  function gcloudCommands() {
+    const found = ['gcloud'];
+    if (process.platform === 'win32' && env.LOCALAPPDATA) found.push(`${env.LOCALAPPDATA}\\Google\\Cloud SDK\\google-cloud-sdk\\bin\\gcloud.cmd`);
+    return found;
+  }
+
+  // The command line is built only from the fixed words below and a path the
+  // installer chose, never from request data.
+  function runGcloud(command) {
     return new Promise((resolve, reject) => {
-      execFile(
-        'gcloud',
-        ['auth', 'application-default', 'print-access-token'],
-        { shell: process.platform === 'win32', timeout: 25_000 },
-        (err, stdout) => {
-          if (err) reject(new Error('Could not get a Google Cloud token. Run "gcloud auth application-default login", or set GOOGLE_APPLICATION_CREDENTIALS to a service-account key file.'));
-          else resolve({ token: stdout.trim(), seconds: 3000 });
-        },
-      );
+      exec(`${command} auth application-default print-access-token`, { timeout: 25_000 }, (err, stdout) => (err ? reject(err) : resolve(stdout.trim())));
     });
+  }
+
+  async function gcloudToken() {
+    for (const command of gcloudCommands()) {
+      try {
+        const token = await runGcloud(command.includes(' ') ? `"${command}"` : command);
+        if (token) return { token, seconds: 3000 };
+      } catch {
+        // try the next place
+      }
+    }
+    throw new Error('Could not get a Google Cloud token. Run "gcloud auth application-default login", or set GOOGLE_APPLICATION_CREDENTIALS to a service-account key file.');
   }
 
   async function accessToken() {
@@ -106,7 +125,7 @@ export function createGemini(env = process.env, endpoints = {}, fetchImpl = fetc
       body: JSON.stringify({
         systemInstruction: { parts: [{ text: system }] },
         contents: [{ role: 'user', parts }],
-        generationConfig: { temperature, maxOutputTokens: maxTokens, ...(responseMimeType ? { responseMimeType } : {}) },
+        generationConfig: { temperature, maxOutputTokens: maxTokens + REASONING_HEADROOM, ...(responseMimeType ? { responseMimeType } : {}) },
       }),
       signal: AbortSignal.timeout(45_000),
     });

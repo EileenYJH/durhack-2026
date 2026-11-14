@@ -31,7 +31,7 @@ test('AI Studio: key in a header, model in the path', async (t) => {
   t.after(g.close);
   const gem = createGemini({ GEMINI_API_KEY: 'studio-key' }, { studio: g.base });
   assert.equal(await gem.generate('sys', [{ text: 'hi' }]), 'OK from mock');
-  assert.equal(g.seen[0].url, '/v1beta/models/gemini-2.5-flash:generateContent');
+  assert.equal(g.seen[0].url, '/v1beta/models/gemini-3.5-flash:generateContent');
   assert.equal(g.seen[0].headers['x-goog-api-key'], 'studio-key');
   assert.equal(JSON.parse(g.seen[0].body).contents[0].role, 'user');
 });
@@ -40,9 +40,9 @@ test('Vertex express: a key in a header, no project in the path', async (t) => {
   const g = await mockGoogle();
   t.after(g.close);
   const gem = createGemini({ GEMINI_PROVIDER: 'vertex-express', VERTEX_API_KEY: 'express-key' }, { express: g.base });
-  assert.equal(gem.describe(), 'Vertex AI express mode, gemini-2.5-flash');
+  assert.equal(gem.describe(), 'Vertex AI express mode, gemini-3.5-flash');
   assert.equal(await gem.generate('sys', [{ text: 'hi' }]), 'OK from mock');
-  assert.equal(g.seen[0].url, '/v1/publishers/google/models/gemini-2.5-flash:generateContent');
+  assert.equal(g.seen[0].url, '/v1/publishers/google/models/gemini-3.5-flash:generateContent');
   assert.equal(g.seen[0].headers['x-goog-api-key'], 'express-key');
   assert.equal(g.seen[0].headers.authorization, undefined);
   // GEMINI_API_KEY is used when it is the only key there is
@@ -63,7 +63,7 @@ test('Vertex with a service account: signed JWT, bearer token, project path, tok
     { GEMINI_PROVIDER: 'vertex', GCP_PROJECT: 'my-proj', GCP_LOCATION: 'europe-west2', GOOGLE_APPLICATION_CREDENTIALS: keyFile },
     { vertex: g.base, token: `${g.base}/token` },
   );
-  assert.equal(gem.describe(), 'Vertex AI, europe-west2, gemini-2.5-flash');
+  assert.equal(gem.describe(), 'Vertex AI, europe-west2, gemini-3.5-flash');
   await gem.generate('sys', [{ text: 'a' }]);
   await gem.generate('sys', [{ text: 'b' }]);
 
@@ -76,7 +76,7 @@ test('Vertex with a service account: signed JWT, bearer token, project path, tok
   assert.ok(createVerify('RSA-SHA256').update(`${h}.${p}`).verify(publicKey, Buffer.from(sig, 'base64url')), 'the signature verifies against the public key');
 
   const calls = g.seen.filter((s) => s.url !== '/token');
-  assert.equal(calls[0].url, '/v1/projects/my-proj/locations/europe-west2/publishers/google/models/gemini-2.5-flash:generateContent');
+  assert.equal(calls[0].url, '/v1/projects/my-proj/locations/europe-west2/publishers/google/models/gemini-3.5-flash:generateContent');
   assert.equal(calls[0].headers.authorization, 'Bearer tok-1');
   assert.equal(calls[0].headers['x-goog-api-key'], undefined, 'no AI Studio key is sent to Vertex');
 });
@@ -101,7 +101,7 @@ test('missing settings are reported before any request is made', () => {
 });
 
 test('the default region is us-central1 and global uses the bare host', () => {
-  assert.equal(createGemini({ GEMINI_PROVIDER: 'vertex', GCP_PROJECT: 'p' }).describe(), 'Vertex AI, us-central1, gemini-2.5-flash');
+  assert.equal(createGemini({ GEMINI_PROVIDER: 'vertex', GCP_PROJECT: 'p' }).describe(), 'Vertex AI, us-central1, gemini-3.5-flash');
 });
 
 const ROOMS = ['Room 102', 'Corridor', 'Seminar'];

@@ -73,7 +73,7 @@ gcloud projects add-iam-policy-binding YOUR_PROJECT_ID --member="serviceAccount:
 gcloud iam service-accounts keys create service-account-key.json --iam-account=rollcall@YOUR_PROJECT_ID.iam.gserviceaccount.com
 ```
 
-3. In `.env` set `GEMINI_PROVIDER=vertex`, `GCP_PROJECT=YOUR_PROJECT_ID`, `GCP_LOCATION=us-central1`, and for a server `GOOGLE_APPLICATION_CREDENTIALS=/opt/rollcall/service-account-key.json`.
+3. In `.env` set `GEMINI_PROVIDER=vertex`, `GEMINI_MODEL=gemini-3.5-flash`, `GCP_PROJECT=YOUR_PROJECT_ID`, `GCP_LOCATION=global`, and for a server `GOOGLE_APPLICATION_CREDENTIALS=/opt/rollcall/service-account-key.json`.
 4. Check it: `node scripts/check-gemini.js`.
 
 Key files are git-ignored. Copy one to a server by itself with `scp`, never inside the project folder you deploy.
