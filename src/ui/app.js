@@ -3,7 +3,8 @@ import { buildingBelief, headcount, STATE_LABEL } from '../core/belief.js';
 import { priority } from '../core/assign.js';
 import { createSim, CUT_X } from '../sim/sim.js';
 import { drawStatic, FILL, shown } from './plan.js';
-import { ruleBrief, deliverBrief } from './brief.js';
+import { ruleBrief, deliverBrief, voice } from './brief.js';
+import { directions, routePoints } from '../core/directions.js';
 
 const $ = (id) => document.getElementById(id);
 const NS = 'http://www.w3.org/2000/svg';
@@ -14,6 +15,7 @@ let speed = 1;
 let paused = false;
 let showTruth = true;
 let latest = null;
+let shownRoute = null;
 let heldUntil = 0;
 const briefHeld = () => performance.now() < heldUntil;
 
@@ -49,7 +51,10 @@ function drawLive() {
     ? sim.people.map((p) => `<circle class="person ${p.mode}" cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="${p.mode === 'down' ? 7 : 6}"/>`).join('')
     : '';
   const nodes = sim.nodes.map(nodeMarkup).join('');
-  $('live').innerHTML = links + cut + people + nodes;
+  const path = shownRoute
+    ? `<polyline class="route" points="${shownRoute.map((p) => `${p.x.toFixed(0)},${p.y.toFixed(0)}`).join(' ')}"/><circle class="route-end" cx="${shownRoute.at(-1).x}" cy="${shownRoute.at(-1).y}" r="9"/>`
+    : '';
+  $('live').innerHTML = links + cut + path + people + nodes;
 }
 
 // ---- panels -------------------------------------------------------------------
@@ -169,6 +174,25 @@ $('speak').addEventListener('click', async (e) => {
   const done = await deliverBrief(latest, $('brief'), $('brief-source'));
   heldUntil = performance.now() + Math.max(4000, done * 1000);
   btn.disabled = false;
+});
+const places = [['OUT', 'Outside (entrance)'], ...ROOM_IDS.map((r) => [r, ROOMS[r].name])];
+$('g-from').innerHTML = places.map(([v, l]) => `<option value="${v}">${l}</option>`).join('');
+$('g-to').innerHTML = '<option value="top">Top of the search order</option>' + places.map(([v, l]) => `<option value="${v}">${v === 'OUT' ? 'Outside (assembly point)' : l}</option>`).join('');
+$('guide').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const from = $('g-from').value;
+  let to = $('g-to').value;
+  if (to === 'top') {
+    const belief = buildingBelief(sim.node(viewer).rep, sim.t);
+    to = ROOM_IDS.filter((r) => r !== 'COR').map((r) => ({ r, p: priority(belief[r]) })).sort((a, b) => b.p - a.p)[0]?.r ?? 'OUT';
+  }
+  const avoid = new Set(sim.fire ? [sim.fire.room] : []);
+  const steps = directions(from, to, { avoid });
+  shownRoute = steps.some((t) => t.startsWith('There is no route')) ? null : routePoints(from, to, { avoid });
+  $('g-text').textContent = steps.join(' ');
+  $('g-go').disabled = true;
+  await voice(steps.join(' '));
+  $('g-go').disabled = false;
 });
 $('show-truth').addEventListener('change', (e) => {
   showTruth = e.currentTarget.checked;

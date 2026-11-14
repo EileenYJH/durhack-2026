@@ -44,6 +44,15 @@
     <h2>Search order</h2>
     <p id="brief" class="brief"></p>
     <div class="brief-row"><button id="speak">Read the brief</button><span id="brief-source" class="source">Rule-based brief</span></div>
+    <form id="guide" class="guide" aria-label="Voice directions">
+      <h2 class="sub">Voice directions</h2>
+      <div class="guide-row">
+        <label for="g-from">From</label><select id="g-from"></select>
+        <label for="g-to">To</label><select id="g-to"></select>
+      </div>
+      <button type="submit" id="g-go">Speak the route</button>
+      <p id="g-text" class="route-text" aria-live="polite"></p>
+    </form>
     <ol id="tally" class="tally"></ol>
     <ul class="key" aria-label="Key">
       <li><i class="sw still"></i>Occupied, still</li>

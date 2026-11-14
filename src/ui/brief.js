@@ -72,7 +72,7 @@ export function unsafeClaim(text, belief) {
   return null;
 }
 
-async function voice(text) {
+export async function voice(text) {
   try {
     const r = await fetch('/api/speak', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ text }) });
     if (!r.ok) throw new Error('no voice');

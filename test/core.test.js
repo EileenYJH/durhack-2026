@@ -170,3 +170,30 @@ test('routes go through doors', () => {
   assert.deepEqual(route('A', 'B'), ['dAB']);
   assert.deepEqual(route('OUT', 'A'), ['dW', 'dA']);
 });
+
+import { directions } from '../src/core/directions.js';
+
+test('directions from the entrance to the Seminar', () => {
+  const text = directions('OUT', 'C').join(' ');
+  assert.match(text, /west entrance/);
+  assert.match(text, /east along the corridor/);
+  assert.match(text, /Seminar is the 3rd door on your left/);
+});
+
+test('directions turn the right way when leaving a room', () => {
+  // Workshop is south of the corridor; leaving it you face north, so east is a right turn.
+  const text = directions('D', 'C').join(' ');
+  assert.match(text, /Leave Workshop by its north door/);
+  assert.match(text, /Turn right and head east/);
+  assert.match(text, /Seminar is the (\d)(st|nd|rd|th) door on your left/);
+});
+
+test('exit directions pick the nearer end', () => {
+  assert.match(directions('D', 'OUT').join(' '), /west exit/);
+  assert.match(directions('F', 'OUT').join(' '), /east exit/);
+});
+
+test('rooms on fire are routed around, or reported as unreachable', () => {
+  assert.match(directions('A', 'B').join(' '), /Go through the door in the east wall into Lab 2/);
+  assert.match(directions('OUT', 'C', { avoid: new Set(['COR']) }).join(' '), /no route/);
+});

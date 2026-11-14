@@ -206,3 +206,13 @@ fieldset { border: 1px solid var(--rule); padding: 10px 12px; margin: 0; display
 .peer-list li { display: flex; justify-content: space-between; gap: 10px; padding: 4px 0; border-bottom: 1px solid var(--rule); }
 .peer-list .meta { font: 400 12px/1.6 var(--mono); color: var(--muted); }
 .peer-list .none { color: var(--muted); display: block; }
+
+/* ---- voice directions ---- */
+.guide { margin: 0 0 14px; padding: 0 0 14px; border-bottom: 1px solid var(--rule); display: grid; gap: 8px; }
+.guide .sub { margin: 0; }
+.guide-row { display: grid; grid-template-columns: auto 1fr; gap: 6px 10px; align-items: center; }
+.guide select { max-width: none; width: 100%; font-size: 15px; padding: 6px 8px; }
+.route-text { margin: 0; font-size: 14.5px; font-weight: 500; }
+.route-text:empty { display: none; }
+#map .route { fill: none; stroke: var(--fire); stroke-width: 7; stroke-dasharray: 2 13; stroke-linecap: round; stroke-linejoin: round; }
+#map .route-end { fill: none; stroke: var(--fire); stroke-width: 3; }

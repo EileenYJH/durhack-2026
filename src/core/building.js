@@ -43,7 +43,8 @@ export function roomCentre(roomId) {
 }
 
 // Shortest door-to-door route between rooms, as a list of door ids.
-export function route(from, to) {
+// `avoid` is a set of rooms the route must not pass through (a room on fire).
+export function route(from, to, avoid = new Set()) {
   if (from === to) return [];
   const prev = { [from]: null };
   const queue = [from];
@@ -53,6 +54,7 @@ export function route(from, to) {
     for (const d of candidates) {
       const nxt = otherSide(d, cur);
       if (nxt in prev) continue;
+      if (avoid.has(nxt) && nxt !== to) continue;
       prev[nxt] = { room: cur, door: d };
       if (nxt === to) {
         const path = [];
