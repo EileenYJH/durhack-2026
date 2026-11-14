@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Roll Call building editor</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="src/ui/style.css">
+</head>
+<body class="editor">
+<header class="bar">
+  <div class="brand"><span class="mark" aria-hidden="true"></span><h1>Roll Call</h1></div>
+  <div class="stat"><span class="k">Building</span><span class="v" id="b-name-top">Teaching block</span></div>
+  <div class="stat"><span class="k">In use now</span><span class="v" id="in-use">Built-in</span></div>
+  <div class="controls">
+    <a class="navlink" href="index.html">Simulation</a>
+    <a class="navlink" href="live.html">Live nodes</a>
+    <button id="use" class="primary">Use this building</button>
+  </div>
+</header>
+
+<main class="editor-main">
+  <section class="canvas-card" aria-label="Floor plan editor">
+    <div class="toolbar" role="toolbar" aria-label="Tools">
+      <button data-tool="select" aria-pressed="true">Select and move</button>
+      <button data-tool="room" aria-pressed="false">Draw room</button>
+      <button data-tool="door" aria-pressed="false">Add door or exit</button>
+      <button data-tool="delete" aria-pressed="false">Delete</button>
+      <span id="tool-help" class="tool-help"></span>
+    </div>
+    <svg id="canvas" viewBox="-60 -30 1160 650" role="application" aria-label="Floor plan canvas"></svg>
+    <p class="hint">Rooms snap to a 10 unit grid. A door goes on a wall: click where two rooms touch for a door between them, or on an outer wall for an exit. Drag the square at a room's corner to resize it.</p>
+  </section>
+
+  <aside class="side">
+    <section class="panel">
+      <h2>Building</h2>
+      <div class="field"><label for="b-name">Name</label><input id="b-name" autocomplete="off"></div>
+      <div id="selection" class="selection"><p class="muted">Select a room or door to edit it.</p></div>
+    </section>
+
+    <section class="panel">
+      <h2>Check</h2>
+      <ul id="checks" class="checks" aria-live="polite"></ul>
+      <p id="sample" class="sample"></p>
+    </section>
+
+    <section class="panel">
+      <h2>Get a layout</h2>
+      <div class="field">
+        <label for="photo">Photo of a floor plan</label>
+        <input id="photo" type="file" accept="image/*">
+        <p class="help">A fire evacuation plan from the wall works well. Gemini reads it and proposes rooms and doors. <strong>Check the result</strong>: a wrong wall gives wrong directions.</p>
+        <p id="photo-status" class="help" role="status"></p>
+      </div>
+      <div class="brief-row">
+        <button id="download">Download JSON</button>
+        <label class="filebtn">Import JSON<input id="import" type="file" accept="application/json,.json"></label>
+      </div>
+      <div class="brief-row">
+        <button id="blank">Start blank</button>
+        <button id="builtin">Built-in building</button>
+      </div>
+    </section>
+  </aside>
+</main>
+
+<script type="module" src="src/editor/editor.js"></script>
+</body>
+</html>

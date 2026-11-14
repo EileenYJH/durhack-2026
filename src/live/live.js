@@ -1,7 +1,7 @@
 // A real node. This page runs on a laptop or phone, keeps its own replica,
 // senses with its own camera, and talks to other devices over the mesh.
 
-import { ROOMS, DOORS, ROOM_IDS, DOOR_IDS } from '../core/building.js';
+import { ROOMS, DOORS, ROOM_IDS, DOOR_IDS, initBuilding, isHall } from '../core/building.js';
 import { createReplica, writeDoor, writeReport } from '../core/replica.js';
 import { buildingBelief, headcount, STATE_LABEL } from '../core/belief.js';
 import { priority } from '../core/assign.js';
@@ -10,6 +10,7 @@ import { ruleBrief, deliverBrief } from '../ui/brief.js';
 import { joinMesh } from './mesh.js';
 import { createTracker } from './tracker.js';
 
+initBuilding();
 const $ = (id) => document.getElementById(id);
 const now = () => Date.now() / 1000;
 const roomName = (id) => (id === 'OUT' ? 'Outside' : ROOMS[id].name);
@@ -206,7 +207,7 @@ function render() {
     $(`state-${id}`).textContent = STATE_LABEL[b.state];
     $(`count-${id}`).textContent = shown(b);
   }
-  const order = ROOM_IDS.map((id) => ({ id, b: belief[id], p: id === 'COR' ? 0 : priority(belief[id]) })).sort((x, y) => y.p - x.p || ROOM_IDS.indexOf(x.id) - ROOM_IDS.indexOf(y.id));
+  const order = ROOM_IDS.map((id) => ({ id, b: belief[id], p: isHall(id) ? 0 : priority(belief[id]) })).sort((x, y) => y.p - x.p || ROOM_IDS.indexOf(x.id) - ROOM_IDS.indexOf(y.id));
   let rank = 0;
   $('tally').innerHTML = order
     .map(({ id, b, p }) => {

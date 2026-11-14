@@ -197,3 +197,75 @@ test('rooms on fire are routed around, or reported as unreachable', () => {
   assert.match(directions('A', 'B').join(' '), /Go through the door in the east wall into Lab 2/);
   assert.match(directions('OUT', 'C', { avoid: new Set(['COR']) }).join(' '), /no route/);
 });
+
+import { DEFAULT_LAYOUT, normalise, validateLayout, fromRaw } from '../src/core/layout.js';
+import { setBuilding, DOORS, ROOMS } from '../src/core/building.js';
+import { createSim } from '../src/sim/sim.js';
+
+// A second, very different building: an L-shaped ground floor with a lobby,
+// one exit on the north wall, and a room reached only through another room.
+const SECOND = {
+  name: 'Library wing',
+  rooms: {
+    L: { name: 'Lobby', x: 0, y: 0, w: 200, h: 120, hall: true },
+    R1: { name: 'Reading room', x: 200, y: 0, w: 240, h: 200 },
+    R2: { name: 'Archive', x: 200, y: 200, w: 240, h: 160 },
+    S: { name: 'Study', x: 0, y: 120, w: 200, h: 240 },
+  },
+  doors: {
+    x1: { a: 'OUT', b: 'L', x: 100, y: 0 },
+    x2: { a: 'L', b: 'R1', x: 200, y: 60 },
+    x3: { a: 'R1', b: 'R2', x: 320, y: 200 },
+    x4: { a: 'L', b: 'S', x: 100, y: 120 },
+  },
+};
+
+test('validation catches a room nobody can reach, and a layout with no exit', () => {
+  const noDoor = JSON.parse(JSON.stringify(SECOND));
+  delete noDoor.doors.x3;
+  const v = validateLayout(normalise(noDoor));
+  assert.equal(v.ok, false);
+  assert.match(v.errors.join(' '), /Archive cannot be reached/);
+
+  const noExit = JSON.parse(JSON.stringify(SECOND));
+  delete noExit.doors.x1;
+  assert.match(validateLayout(normalise(noExit)).errors.join(' '), /at least one exit/);
+});
+
+test('normalise snaps a loose door onto the wall it belongs to and orients exits', () => {
+  const loose = JSON.parse(JSON.stringify(SECOND));
+  loose.doors.x2 = { a: 'R1', b: 'L', x: 207, y: 66 };
+  loose.doors.x1 = { a: 'L', b: 'OUT', x: 96, y: 9 };
+  const n = normalise(loose);
+  assert.deepEqual([n.doors.x2.x, n.doors.x2.y], [200, 66]);
+  assert.deepEqual([n.doors.x1.a, n.doors.x1.b, n.doors.x1.y], ['OUT', 'L', 0]);
+  assert.equal(validateLayout(n).ok, true);
+});
+
+test('arrays from the photo import become a layout', () => {
+  const l = fromRaw({ name: 'x', rooms: [{ id: 'a', name: 'A', x: 0, y: 0, w: 100, h: 100 }], doors: [{ id: 'd', a: 'a', b: 'OUT', x: 50, y: 0 }] });
+  assert.equal(l.rooms.a.w, 100);
+  assert.equal(l.doors.d.b, 'OUT');
+});
+
+test('the whole system runs on a different building', (t) => {
+  t.after(() => setBuilding(DEFAULT_LAYOUT));
+  assert.equal(validateLayout(normalise(SECOND)).ok, true);
+  setBuilding(SECOND);
+  assert.deepEqual(route('OUT', 'R2'), ['x1', 'x2', 'x3']);
+  assert.match(directions('OUT', 'R2').join(' '), /Enter by the north entrance/);
+  assert.match(directions('R2', 'OUT').join(' '), /Lobby/);
+  const sim = createSim(3);
+  for (let i = 0; i < 600; i++) sim.step(0.1);
+  sim.raiseAlarm();
+  for (let i = 0; i < 900; i++) sim.step(0.1);
+  assert.ok(sim.people.length > 0);
+  const post = sim.node('POST').rep;
+  assert.ok(Object.keys(post.doors).length >= 4, 'the command post heard the door nodes');
+  assert.ok(Object.keys(post.reports).length >= 3, 'and the room sensors');
+});
+
+test('the built-in building is restored after that', () => {
+  assert.ok(ROOMS.COR && DOORS.dW);
+  assert.match(directions('OUT', 'C').join(' '), /Seminar is the 3rd door on your left/);
+});

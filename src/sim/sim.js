@@ -2,13 +2,12 @@
 // radio network whose links can be cut. Every node owns a separate replica and
 // only learns about the others through messages on that network.
 
-import { ROOMS, DOORS, ROOM_IDS, DOOR_IDS, route, roomCentre } from '../core/building.js';
+import { ROOMS, DOORS, ROOM_IDS, DOOR_IDS, route, routeLength, roomCentre, exitDoors, innerRoom, isHall, searchRooms, outward, assemblyOf, bounds, getBuilding } from '../core/building.js';
 import { createReplica, writeDoor, writeReport, writeClaim, snapshot, merge } from '../core/replica.js';
 import { buildingBelief } from '../core/belief.js';
 import { assign, priority } from '../core/assign.js';
 
 export const RANGE = 265; // radio range in drawing units
-export const CUT_X = 660; // where the building is severed when the link is cut
 
 function rng(seed) {
   let a = seed >>> 0;
@@ -20,8 +19,6 @@ function rng(seed) {
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
 }
-
-const START = { A: 3, B: 2, C: 3, D: 2, E: 1, F: 2 };
 
 export function createSim(seed = 7) {
   const rand = rng(seed);
@@ -37,8 +34,29 @@ export function createSim(seed = 7) {
     linkNews: {}, // "a|b" -> time news last crossed that link
   };
 
+  const layout = getBuilding();
+  const sc = layout.scenario ?? {};
+  const search = searchRooms();
+  const known = (id) => id in ROOMS && !ROOMS[id].hall;
+  const counts = {};
+  if (sc.people) for (const [r, n] of Object.entries(sc.people)) if (known(r)) counts[r] = n;
+  if (!Object.keys(counts).length) for (const r of search) counts[r] = 1 + Math.floor(rand() * 3);
+  const farFirst = [...search].sort((a, b) => routeLength(roomCentre('OUT'), 'OUT', b) - routeLength(roomCentre('OUT'), 'OUT', a));
+  const fireRoom = known(sc.fire) ? sc.fire : farFirst[0];
+  const downRooms = (sc.down ?? []).filter(known).length ? sc.down.filter(known) : [fireRoom, farFirst[1] ?? fireRoom];
+  const bb = bounds();
+  sim.cutX = Number.isFinite(sc.cutX) ? sc.cutX : (bb.minX + bb.maxX) / 2;
+  const exit0 = exitDoors()[0];
+  const out0 = outward(exit0);
+  const asm0 = assemblyOf(exit0);
+
   const pointIn = (roomId, exitDoor) => {
-    if (roomId === 'OUT') return { x: (exitDoor === 'dX' ? 975 : -85) + rand() * 60, y: 395 + rand() * 120 };
+    if (roomId === 'OUT') {
+      const a = assemblyOf(exitDoor ?? exit0);
+      const across = 20 + rand() * 110;
+      const along = (rand() - 0.5) * 60;
+      return { x: a.x + a.perp.x * across + a.out.x * along, y: a.y + a.perp.y * across + a.out.y * along };
+    }
     const r = ROOMS[roomId];
     return { x: r.x + 28 + rand() * (r.w - 56), y: r.y + 30 + rand() * (r.h - 60) };
   };
@@ -49,14 +67,14 @@ export function createSim(seed = 7) {
 
   // ---- people -------------------------------------------------------------
   let pid = 0;
-  for (const [room, n] of Object.entries(START)) {
+  for (const [room, n] of Object.entries(counts)) {
     for (let i = 0; i < n; i++) {
       sim.people.push({ id: `p${++pid}`, room, ...pointIn(room), path: [], mode: 'wander', speed: 42 + rand() * 16, wait: 2 + rand() * 8 });
     }
   }
 
   function sendTo(mover, toRoom, exitDoor) {
-    const doors = exitDoor ? [...route(mover.room, DOORS[exitDoor].b), exitDoor] : route(mover.room, toRoom);
+    const doors = exitDoor ? [...route(mover.room, innerRoom(exitDoor)), exitDoor] : route(mover.room, toRoom);
     let room = mover.room;
     const path = [];
     for (const d of doors) {
@@ -69,9 +87,7 @@ export function createSim(seed = 7) {
   }
 
   function nearestExit(p) {
-    const dw = Math.hypot(p.x - DOORS.dW.x, p.y - DOORS.dW.y);
-    const dx = Math.hypot(p.x - DOORS.dX.x, p.y - DOORS.dX.y);
-    return dw <= dx ? 'dW' : 'dX';
+    return exitDoors().reduce((best, e) => (Math.hypot(p.x - DOORS[e].x, p.y - DOORS[e].y) < Math.hypot(p.x - DOORS[best].x, p.y - DOORS[best].y) ? e : best));
   }
 
   function advance(mover, dt, onCross) {
@@ -102,30 +118,40 @@ export function createSim(seed = 7) {
     sim.nodes.push(node);
     return node;
   };
-  for (const d of DOOR_IDS) addNode({ id: d, kind: 'door', label: `Door ${d.slice(1)}`, x: DOORS[d].x, y: DOORS[d].y, ab: 0, ba: 0 });
+  for (const d of DOOR_IDS) addNode({ id: d, kind: 'door', label: `Door ${d.replace(/^d/, '')}`, x: DOORS[d].x, y: DOORS[d].y, ab: 0, ba: 0 });
   for (const r of ROOM_IDS) {
     const c = roomCentre(r);
-    addNode({ id: `room-${r}`, kind: 'room', room: r, label: `${ROOMS[r].name} sensor`, x: c.x, y: r === 'COR' ? c.y + 30 : c.y - 70, emptyStreak: 0 });
+    addNode({ id: `room-${r}`, kind: 'room', room: r, label: `${ROOMS[r].name} sensor`, x: c.x, y: isHall(r) ? c.y + 30 : c.y - Math.min(70, ROOMS[r].h / 3), emptyStreak: 0 });
   }
-  addNode({ id: 'POST', kind: 'post', label: 'Command post', x: -20, y: 300 });
-  addNode({ id: 'R1', kind: 'responder', label: 'Responder 1', room: 'OUT', x: -30, y: 250, path: [], speed: 70, target: null, searching: 0, home: { x: -30, y: 250 } });
-  addNode({ id: 'R2', kind: 'responder', label: 'Responder 2', room: 'OUT', x: -30, y: 350, path: [], speed: 70, target: null, searching: 0, home: { x: -30, y: 350 } });
+  const at = (along, across) => ({ x: DOORS[exit0].x + out0.x * along + asm0.perp.x * across, y: DOORS[exit0].y + out0.y * along + asm0.perp.y * across });
+  const home1 = at(40, -55);
+  const home2 = at(40, 55);
+  addNode({ id: 'POST', kind: 'post', label: 'Command post', ...at(60, 0) });
+  addNode({ id: 'R1', kind: 'responder', label: 'Responder 1', room: 'OUT', ...home1, path: [], speed: 70, target: null, searching: 0, home: { ...home1 } });
+  addNode({ id: 'R2', kind: 'responder', label: 'Responder 2', room: 'OUT', ...home2, path: [], speed: 70, target: null, searching: 0, home: { ...home2 } });
 
   const byId = Object.fromEntries(sim.nodes.map((n) => [n.id, n]));
   sim.node = (id) => byId[id];
 
   // The day starts with people already inside: they came in through the main
   // entrance and their room's door, and the counters recorded it.
-  for (const [room, n] of Object.entries(START)) {
-    byId.dW.ab += n;
-    byId[`d${room}`].ab += n;
+  for (const [room, n] of Object.entries(counts)) {
+    const path = route('OUT', room);
+    for (let k = 0; k < n; k++) {
+      let prev = 'OUT';
+      for (const d of path) {
+        if (DOORS[d].a === prev) byId[d].ab += 1;
+        else byId[d].ba += 1;
+        prev = DOORS[d].a === prev ? DOORS[d].b : DOORS[d].a;
+      }
+    }
   }
 
   // ---- network ------------------------------------------------------------
   sim.linked = (a, b) => {
     if (!a.alive || !b.alive) return false;
     if (Math.hypot(a.x - b.x, a.y - b.y) > RANGE) return false;
-    if (sim.cut && (a.x - CUT_X) * (b.x - CUT_X) < 0) return false;
+    if (sim.cut && (a.x - sim.cutX) * (b.x - sim.cutX) < 0) return false;
     return true;
   };
   sim.links = () => {
@@ -212,8 +238,9 @@ export function createSim(seed = 7) {
       if (target) {
         sendTo(node, target);
         say(`${node.label} heads for ${ROOMS[target].name}. ${belief[target].why}.`, 'act');
-      } else if (node.room !== 'COR') {
-        sendTo(node, 'COR');
+      } else {
+        const hall = ROOM_IDS.find(isHall);
+        if (hall && node.room !== hall) sendTo(node, hall);
       }
     }
   }
@@ -299,11 +326,11 @@ export function createSim(seed = 7) {
   sim.raiseAlarm = () => {
     if (sim.alarm) return;
     sim.alarm = true;
-    sim.fire = { room: 'C', burnAt: sim.t + 14 };
-    say('Alarm raised. Fire reported in Seminar.', 'warn');
+    sim.fire = { room: fireRoom, burnAt: sim.t + 14 };
+    say(`Alarm raised. Fire reported in ${ROOMS[fireRoom].name}.`, 'warn');
     const pick = (room) => sim.people.find((p) => p.room === room && p.mode === 'wander');
-    for (const room of ['C', 'E']) {
-      const p = pick(room) ?? sim.people.find((q) => q.mode === 'wander' && q.room !== 'OUT' && q.room !== 'COR');
+    for (const room of downRooms) {
+      const p = pick(room) ?? sim.people.find((q) => q.mode === 'wander' && q.room !== 'OUT' && !isHall(q.room));
       if (p) {
         p.mode = 'down';
         p.path = [];
@@ -321,7 +348,7 @@ export function createSim(seed = 7) {
   sim.setCut = (on) => {
     if (sim.cut === on) return;
     sim.cut = on;
-    say(on ? 'Link to the east wing is down' : 'Link to the east wing is back', on ? 'warn' : 'ok');
+    say(on ? 'The link between the two halves of the building is down' : 'The link between the two halves is back', on ? 'warn' : 'ok');
   };
   sim.toggleNode = (id) => {
     const n = byId[id];

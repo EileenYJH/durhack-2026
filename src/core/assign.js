@@ -6,7 +6,7 @@
 // rooms without exchanging a word. If their records differ they may overlap;
 // claims are replicated, so that settles when they next hear each other.
 
-import { ROOM_IDS, routeLength } from './building.js';
+import { ROOM_IDS, ROOMS, routeLength } from './building.js';
 
 const URGENCY = { still: 100, occupied: 80, possible: 55, unknown: 30, empty: 0 };
 
@@ -16,7 +16,7 @@ export function priority(b) {
 }
 
 export function rankRooms(belief) {
-  return ROOM_IDS.filter((id) => id !== 'COR' && priority(belief[id]) > 0)
+  return ROOM_IDS.filter((id) => !ROOMS[id].hall && priority(belief[id]) > 0)
     .map((id) => ({ room: id, score: priority(belief[id]), state: belief[id].state, why: belief[id].why }))
     .sort((a, b) => b.score - a.score || a.room.localeCompare(b.room));
 }
@@ -29,7 +29,7 @@ export function assign(belief, responders) {
   for (const r of ordered) {
     let best = null;
     for (const id of ROOM_IDS) {
-      if (id === 'COR' || taken.has(id)) continue;
+      if (ROOMS[id].hall || taken.has(id)) continue;
       const p = priority(belief[id]);
       if (p <= 0) continue;
       const dist = routeLength({ x: r.x, y: r.y }, r.room, id);

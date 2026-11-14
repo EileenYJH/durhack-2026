@@ -6,7 +6,7 @@
 
 import { createSim } from '../src/sim/sim.js';
 import { buildingBelief } from '../src/core/belief.js';
-import { ROOM_IDS } from '../src/core/building.js';
+import { ROOM_IDS, ROOMS } from '../src/core/building.js';
 
 const RUNS = Number(process.argv[2] ?? 200);
 const SETTLE = 2.5; // seconds a person may have been in a room before a miss counts
@@ -32,7 +32,7 @@ for (let run = 0; run < RUNS; run++) {
     alarm: 8 + rand() * 12,
     cutOn: 4 + rand() * 20,
     cutOff: 30 + rand() * 30,
-    fails: Array.from({ length: Math.floor(rand() * 3) }, () => ({ at: 5 + rand() * 40, id: sim.nodes[Math.floor(rand() * 16)].id })),
+    fails: Array.from({ length: Math.floor(rand() * 3) }, () => ({ at: 5 + rand() * 40, id: sim.nodes.filter((n) => n.kind === 'door' || n.kind === 'room')[Math.floor(rand() * sim.nodes.filter((n) => n.kind === 'door' || n.kind === 'room').length)].id })),
   };
   let healedAt = null;
   let unsafeThisRun = 0;
@@ -67,7 +67,7 @@ for (let run = 0; run < RUNS; run++) {
     const views = sim.nodes.filter((n) => n.alive).map((n) => buildingBelief(n.rep, t));
     for (const view of views) {
       for (const r of ROOM_IDS) {
-        if (r === 'COR') continue; // people only pass through; not a search target
+        if (ROOMS[r].hall) continue; // people only pass through; not a search target
         const b = view[r];
         if (truth[r] > 0 && t - (since[r] ?? 0) > SETTLE) {
           total.checks += 1;

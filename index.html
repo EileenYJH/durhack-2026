@@ -20,9 +20,10 @@
   <div class="stat"><span class="k">Actually inside</span><span class="v" id="truth">0</span></div>
   <div class="stat"><span class="k">Rooms unknown</span><span class="v" id="unknowns">0</span></div>
   <div class="controls">
+    <a class="navlink" href="editor.html">Building</a>
     <a class="navlink" href="live.html">Live nodes</a>
     <button id="alarm" class="primary">Raise alarm</button>
-    <button id="cut" aria-pressed="false">Cut east link</button>
+    <button id="cut" aria-pressed="false">Cut the link</button>
     <button id="fail">Fail a sensor</button>
     <button id="pause" aria-pressed="false">Pause</button>
     <button id="speed">Speed 1x</button>
@@ -36,7 +37,7 @@
       <h2>Ground floor, as believed by <span id="viewer-name">Command post</span></h2>
       <label class="check"><input type="checkbox" id="show-truth" checked> Show real people <em>(simulation only)</em></label>
     </div>
-    <svg id="map" viewBox="-120 -10 1180 620" role="img" aria-label="Floor plan with rooms, sensors and people"></svg>
+    <svg id="map" role="img" aria-label="Floor plan with rooms, sensors and people"></svg>
     <p class="hint">Select any sensor or responder on the plan to see the building as that node believes it. Every node keeps its own copy.</p>
   </section>
 

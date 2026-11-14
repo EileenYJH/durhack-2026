@@ -2,12 +2,12 @@
 // against the data before it is shown, and spoken by ElevenLabs. Without keys
 // it falls back to a rule-based sentence and the browser's own voice.
 
-import { ROOMS, ROOM_IDS } from '../core/building.js';
+import { ROOMS, ROOM_IDS, isHall } from '../core/building.js';
 import { STATE_LABEL } from '../core/belief.js';
 import { priority } from '../core/assign.js';
 
 const ranked = (belief) =>
-  ROOM_IDS.filter((id) => id !== 'COR')
+  ROOM_IDS.filter((id) => !isHall(id))
     .map((id) => ({ id, b: belief[id], p: priority(belief[id]) }))
     .filter((o) => o.p > 0)
     .sort((x, y) => y.p - x.p);
@@ -52,7 +52,7 @@ function payload(latest) {
         confidence_percent: b.conf,
         reading_age_seconds: b.age === null || b.age === undefined ? null : Math.round(b.age),
         reason: b.why,
-        search_priority: id === 'COR' ? 0 : priority(b),
+        search_priority: isHall(id) ? 0 : priority(b),
       };
     }),
   };

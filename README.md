@@ -29,6 +29,7 @@ No build step and no dependencies (Node 22 or newer):
 node server.js
 ```
 
+- http://localhost:8200/editor.html is the building editor: draw rooms, add doors and exits, or import a photo of a floor plan (needs `GEMINI_API_KEY`). "Use this building" makes every page work on your layout.
 - http://localhost:8200 is the simulation: 19 nodes, each with its own copy of the state, on a network you can cut.
 - http://localhost:8200/live.html turns the device into a real node. Open it on several devices or windows with the same mesh code. Roles: command board, door camera (counts people crossing a doorway), room camera (reports presence and whether people are moving).
 - Tests: `node --test`. Safety measurement: `node scripts/evaluate.js 200`. Results are in [docs/evaluation.md](docs/evaluation.md).
@@ -56,7 +57,8 @@ The server keeps no data: the mesh relay only forwards messages. The Gemini and 
 ## Layout
 
 - `docs/` notes, brief, pitch
-- `src/core/` replicated state, belief rules, responder assignment (tested)
+- `src/core/` replicated state, belief rules, responder assignment, building layout, directions (tested)
+- `src/editor/` the layout editor
 - `src/sim/` simulated people, sensors and network
 - `src/live/` real device nodes: mesh transport, camera tracker
 - `src/ui/` the command board and the brief

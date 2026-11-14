@@ -1,6 +1,6 @@
 # Evaluation
 
-Measured with `node scripts/evaluate.js 200` on 14 November 2026. Everything here is from the simulation, not from a real building.
+Measured with `node scripts/evaluate.js 200` on 14 November 2026, and measured again after the building was made data-driven (unsafe empty 0.276%, unknown 2.93%, wrong-empty at the end 0 of 200). Everything here is from the simulation, not from a real building.
 
 ## Method
 

@@ -1,7 +1,7 @@
-import { ROOMS, DOORS, ROOM_IDS, DOOR_IDS } from '../core/building.js';
+import { ROOMS, ROOM_IDS, initBuilding, isHall, searchRooms, bounds } from '../core/building.js';
 import { buildingBelief, headcount, STATE_LABEL } from '../core/belief.js';
 import { priority } from '../core/assign.js';
-import { createSim, CUT_X } from '../sim/sim.js';
+import { createSim } from '../sim/sim.js';
 import { drawStatic, FILL, shown } from './plan.js';
 import { ruleBrief, deliverBrief, voice } from './brief.js';
 import { directions, routePoints } from '../core/directions.js';
@@ -9,6 +9,7 @@ import { directions, routePoints } from '../core/directions.js';
 const $ = (id) => document.getElementById(id);
 const NS = 'http://www.w3.org/2000/svg';
 
+const source = initBuilding();
 let sim = createSim(7);
 let viewer = 'POST';
 let speed = 1;
@@ -43,9 +44,10 @@ function nodeMarkup(n) {
 }
 
 function drawLive() {
+  const cutBounds = bounds();
   const links = sim.links().map((l) => `<line class="link${l.hot ? ' hot' : ''}${l.a.id === viewer || l.b.id === viewer ? ' mine' : ''}" x1="${l.a.x.toFixed(1)}" y1="${l.a.y.toFixed(1)}" x2="${l.b.x.toFixed(1)}" y2="${l.b.y.toFixed(1)}"/>`).join('');
   const cut = sim.cut
-    ? `<line class="cutline" x1="${CUT_X}" y1="20" x2="${CUT_X}" y2="580"/><text class="cutlabel" x="${CUT_X + 8}" y="16">LINK DOWN</text>`
+    ? `<line class="cutline" x1="${sim.cutX}" y1="${cutBounds.minY - 20}" x2="${sim.cutX}" y2="${cutBounds.maxY + 20}"/><text class="cutlabel" x="${sim.cutX + 8}" y="${cutBounds.minY - 24}">LINK DOWN</text>`
     : '';
   const people = showTruth
     ? sim.people.map((p) => `<circle class="person ${p.mode}" cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="${p.mode === 'down' ? 7 : 6}"/>`).join('')
@@ -87,7 +89,7 @@ function drawPanels() {
   } else tag.textContent = '';
 
   // search order
-  const order = ROOM_IDS.map((id) => ({ id, b: belief[id], p: id === 'COR' ? 0 : priority(belief[id]) })).sort((x, y) => y.p - x.p || ROOM_IDS.indexOf(x.id) - ROOM_IDS.indexOf(y.id));
+  const order = ROOM_IDS.map((id) => ({ id, b: belief[id], p: isHall(id) ? 0 : priority(belief[id]) })).sort((x, y) => y.p - x.p || ROOM_IDS.indexOf(x.id) - ROOM_IDS.indexOf(y.id));
   let rank = 0;
   $('tally').innerHTML = order
     .map(({ id, b, p }) => {
@@ -145,7 +147,7 @@ $('alarm').addEventListener('click', () => sim.raiseAlarm());
 $('cut').addEventListener('click', (e) => {
   sim.setCut(!sim.cut);
   e.currentTarget.setAttribute('aria-pressed', String(sim.cut));
-  e.currentTarget.textContent = sim.cut ? 'Restore east link' : 'Cut east link';
+  e.currentTarget.textContent = sim.cut ? 'Restore the link' : 'Cut the link';
 });
 $('fail').addEventListener('click', () => {
   const n = sim.node(viewer);
@@ -164,7 +166,7 @@ $('reset').addEventListener('click', () => {
   sim = createSim(7);
   viewer = 'POST';
   $('cut').setAttribute('aria-pressed', 'false');
-  $('cut').textContent = 'Cut east link';
+  $('cut').textContent = 'Cut the link';
   drawPanels();
 });
 $('speak').addEventListener('click', async (e) => {
@@ -184,7 +186,7 @@ $('guide').addEventListener('submit', async (e) => {
   let to = $('g-to').value;
   if (to === 'top') {
     const belief = buildingBelief(sim.node(viewer).rep, sim.t);
-    to = ROOM_IDS.filter((r) => r !== 'COR').map((r) => ({ r, p: priority(belief[r]) })).sort((a, b) => b.p - a.p)[0]?.r ?? 'OUT';
+    to = searchRooms().map((r) => ({ r, p: priority(belief[r]) })).sort((a, b) => b.p - a.p)[0]?.r ?? 'OUT';
   }
   const avoid = new Set(sim.fire ? [sim.fire.room] : []);
   const steps = directions(from, to, { avoid });
