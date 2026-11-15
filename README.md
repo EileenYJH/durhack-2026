@@ -79,6 +79,8 @@ gcloud iam service-accounts keys create service-account-key.json --iam-account=r
 
 Key files are git-ignored. Copy one to a server by itself with `scp`, never inside the project folder you deploy.
 
+On a host that only takes variables (Railway, for example), put the whole key JSON in `GOOGLE_CREDENTIALS_JSON` instead of a file path. Google Cloud credits pay for Vertex AI but not for AI Studio, which has its own prepaid balance.
+
 ## Deploy to Railway (Easiest)
 
 [![Deploy on Railway](https://railway.app/button.svg)](https://railway.app/template/xLWXPE?referralCode=alphasec)
