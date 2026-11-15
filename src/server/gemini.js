@@ -76,12 +76,13 @@ export function createGemini(env = process.env, endpoints = {}, fetchImpl = fetc
   // installer chose, never from request data.
   function runGcloud(command) {
     return new Promise((resolve, reject) => {
-      exec(`${command} auth application-default print-access-token`, { timeout: 25_000 }, (err, stdout) => (err ? reject(err) : resolve(stdout.trim())));
+      // gcloud can take a long time to start on Windows; give it room.
+      exec(`${command} auth application-default print-access-token`, { timeout: 60_000 }, (err, stdout) => (err ? reject(err) : resolve(stdout.trim())));
     });
   }
 
   async function gcloudToken() {
-    for (const command of gcloudCommands()) {
+    for (const command of [...gcloudCommands(), ...gcloudCommands()]) {
       try {
         const token = await runGcloud(command.includes(' ') ? `"${command}"` : command);
         if (token) return { token, seconds: 3000 };
