@@ -63,7 +63,14 @@
       <h2>Ground floor, as believed by <span id="viewer-name">Command post</span></h2>
       <label class="check"><input type="checkbox" id="show-truth" checked> Show real people <em>(simulation only)</em></label>
     </div>
-    <svg id="map" role="img" aria-label="Floor plan with rooms, sensors and people"></svg>
+    <div class="map-wrap">
+      <svg id="map" role="img" aria-label="Floor plan with rooms, sensors and people"></svg>
+      <div id="event" class="event" role="status" aria-live="polite" hidden>
+        <p id="event-title" class="event-title"></p>
+        <p id="event-watch" class="event-watch"></p>
+      </div>
+    </div>
+    <ol id="ticker" class="ticker" aria-label="Latest events"></ol>
     <p class="hint">Select any sensor or responder on the plan to see the building as that node believes it. Every node keeps its own copy.</p>
   </section>
 

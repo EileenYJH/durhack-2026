@@ -413,3 +413,26 @@ body.ff.mayday .ff-top { background: #3a0b12; }
 #ff-map .ff-room:active { stroke: #f2bd2b; stroke-width: 8; }
 #map .manual-ring { fill: none; stroke: var(--hazard); stroke-width: 3; stroke-dasharray: 5 4; }
 #map .manual-text { font-size: 12px; font-weight: 700; fill: var(--hazard) !important; letter-spacing: 0.08em; paint-order: stroke; stroke: var(--sheet); stroke-width: 3px; }
+
+/* ---- what just happened: banner, highlight and latest events over the plan ---- */
+.map-wrap { position: relative; }
+.event { position: absolute; left: 10px; right: 10px; top: 10px; max-width: 640px; padding: 10px 14px 11px; background: var(--sheet); border: 2px solid var(--ink); border-left: 12px solid var(--tone, var(--fire)); box-shadow: 0 6px 22px rgba(0, 0, 0, 0.28); pointer-events: none; animation: event-in 0.35s ease-out; }
+.event.go { --tone: var(--go); }
+.event.hazard { --tone: var(--hazard); }
+.event-title { margin: 0; font-family: var(--display); font-weight: 700; font-size: 21px; letter-spacing: 0.04em; text-transform: uppercase; color: var(--tone, var(--fire)); }
+.event-watch { margin: 4px 0 0; font-size: 15px; line-height: 1.35; }
+.event-watch b { font-weight: 600; }
+.event.fading { opacity: 0; transition: opacity 0.6s; }
+@keyframes event-in { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: none; } }
+#map .focus { fill: none; stroke: var(--tone, var(--fire)); stroke-width: 5; pointer-events: none; animation: focus-pulse 0.9s ease-in-out infinite; }
+#map .focus.go { --tone: var(--go); }
+#map .focus.hazard { --tone: var(--hazard); }
+@keyframes focus-pulse { 50% { stroke-width: 11; stroke-opacity: 0.45; } }
+.ticker { list-style: none; margin: 6px 0 0; padding: 0; display: grid; gap: 3px; min-height: calc(3 * 1.45em); font-size: 14px; }
+.ticker li { display: flex; gap: 10px; align-items: baseline; padding-left: 8px; border-left: 4px solid var(--muted); }
+.ticker li.warn { border-left-color: var(--fire); }
+.ticker li.act { border-left-color: var(--hazard); }
+.ticker li.ok { border-left-color: var(--go); }
+.ticker li:first-child { font-weight: 600; }
+.ticker time { font-family: var(--mono, monospace); color: var(--muted); font-size: 12.5px; }
+@media (prefers-reduced-motion: reduce) { .event, #map .focus { animation: none; } }

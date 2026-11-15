@@ -491,3 +491,32 @@ test('a rescued firefighter is brought out with the rescuer, not on their own', 
   }
   assert.fail('no seed produced a rescue to check');
 });
+
+test('a thin corridor drawn over rooms is cut back to their walls, and keeps its doors', () => {
+  // Two rooms above a 30-unit corridor that Gemini drew 5 units into them,
+  // and a side corridor drawn right over a third room.
+  const l = {
+    name: 'overlap',
+    rooms: {
+      A: { name: 'Room A', x: 100, y: 100, w: 100, h: 100 },
+      B: { name: 'Room B', x: 200, y: 100, w: 100, h: 100 },
+      H: { name: 'Corridor', hall: true, x: 100, y: 195, w: 200, h: 35 },
+      C: { name: 'Room C', x: 340, y: 120, w: 60, h: 60 },
+      S: { name: 'Side corridor', hall: true, x: 300, y: 100, w: 100, h: 130 },
+    },
+    doors: {
+      d1: { a: 'A', b: 'H', x: 150, y: 200 },
+      d2: { a: 'B', b: 'H', x: 250, y: 200 },
+      d3: { a: 'OUT', b: 'H', x: 100, y: 215 },
+      d4: { a: 'C', b: 'S', x: 340, y: 150 },
+      d5: { a: 'H', b: 'S', x: 300, y: 215 },
+    },
+  };
+  const { layout, notes } = repairLayout(l);
+  const v = validateLayout(layout);
+  assert.equal(v.ok, true, v.errors.join('; '));
+  assert.equal(v.warnings.filter((w) => /overlap/.test(w)).length, 0, v.warnings.join('; '));
+  assert.ok(Object.values(layout.doors).some((d) => [d.a, d.b].sort().join() === 'A,H'), 'Room A keeps its door to the corridor');
+  assert.ok(Object.values(layout.doors).some((d) => [d.a, d.b].sort().join() === 'B,H'), 'Room B keeps its door to the corridor');
+  assert.ok(notes.some((n) => /Cut back/.test(n)));
+});

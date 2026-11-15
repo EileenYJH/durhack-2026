@@ -7,7 +7,7 @@
 // and reports everything it changed, so the person checking it knows where
 // to look.
 
-import { normalise } from './layout.js';
+import { normalise, minSize } from './layout.js';
 
 // Drawing area used by the editor and the plan views.
 export const CANVAS = { x: 60, y: 40, w: 880, h: 520 };
@@ -124,14 +124,38 @@ export function repairLayout(input, { snap = 14 } = {}) {
     if (x2 - x1 >= 20) [r.x, r.w] = [x1, x2 - x1];
     if (y2 - y1 >= 20) [r.y, r.h] = [y1, y2 - y1];
   }
-  // Rooms too small to draw are grown to the minimum around their centre.
+  // Spaces too small to draw are grown to the minimum around their centre.
+  // (A corridor's minimum is smaller than a room's: it only needs room for a door.)
   for (const r of Object.values(R)) {
-    if (r.w < 40 || r.h < 40) {
+    const m = minSize(r);
+    if (r.w < m || r.h < m) {
       notes.push(`Enlarged "${r.name}" to the smallest drawable size.`);
-      if (r.w < 40) [r.x, r.w] = [Math.round(r.x + r.w / 2 - 20), 40];
-      if (r.h < 40) [r.y, r.h] = [Math.round(r.y + r.h / 2 - 20), 40];
+      if (r.w < m) [r.x, r.w] = [Math.round(r.x + r.w / 2 - m / 2), m];
+      if (r.h < m) [r.y, r.h] = [Math.round(r.y + r.h / 2 - m / 2), m];
     }
   }
+
+  // A corridor drawn over a room is cut back to that room's wall: rooms are
+  // what Gemini reads best, corridors are the leftover floor around them. Of
+  // the four possible cuts, keep the one that leaves the most corridor.
+  const trimmed = new Set();
+  const halls = Object.values(R).filter((r) => r.hall);
+  for (const h of halls) {
+    for (const o of Object.values(R)) {
+      if (o === h || (o.hall && o.w * o.h < h.w * h.h) || !overlaps(h, o)) continue;
+      const cuts = [
+        { x: h.x, y: h.y, w: o.x - h.x, h: h.h }, // keep the part left of it
+        { x: o.x + o.w, y: h.y, w: h.x + h.w - (o.x + o.w), h: h.h }, // right of it
+        { x: h.x, y: h.y, w: h.w, h: o.y - h.y }, // above it
+        { x: h.x, y: o.y + o.h, w: h.w, h: h.y + h.h - (o.y + o.h) }, // below it
+      ].filter((c) => c.w >= minSize(h) && c.h >= minSize(h));
+      if (!cuts.length) continue;
+      const best = cuts.sort((a, b) => b.w * b.h - a.w * a.h)[0];
+      Object.assign(h, best);
+      trimmed.add(h.name);
+    }
+  }
+  if (trimmed.size) notes.push(`Cut back ${[...trimmed].map((n) => `"${n}"`).join(', ')} where it was drawn over a room.`);
 
   // 2. Each door is put on the wall it belongs to, or dropped.
   // When Gemini says two spaces connect but a strip of wall or a small

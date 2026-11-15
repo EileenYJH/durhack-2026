@@ -103,6 +103,10 @@ export function normalise(layout) {
 }
 
 // Returns { ok, errors, warnings }. Errors stop a layout being used.
+// A room needs space for its label; a corridor only needs to be wide enough
+// for a door on its long side.
+export const minSize = (r) => (r.hall ? 24 : 40);
+
 export function validateLayout(layout) {
   const errors = [];
   const warnings = [];
@@ -115,7 +119,7 @@ export function validateLayout(layout) {
     const r = rooms[id];
     if (id === 'OUT') errors.push('A room cannot be called OUT.');
     if (![r.x, r.y, r.w, r.h].every(Number.isFinite)) errors.push(`${r.name || id} has no usable size.`);
-    else if (r.w < 40 || r.h < 40) errors.push(`${r.name || id} is too small to draw (under 40 units).`);
+    else if (Math.min(r.w, r.h) < minSize(r)) errors.push(`${r.name || id} is too small to draw (under ${minSize(r)} units).`);
     if (!String(r.name ?? '').trim()) errors.push(`Room ${id} needs a name.`);
   }
   const names = new Map();

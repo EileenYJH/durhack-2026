@@ -90,7 +90,77 @@ function drawLive() {
   const path = shownRoute
     ? `<polyline class="route" points="${shownRoute.map((p) => `${p.x.toFixed(0)},${p.y.toFixed(0)}`).join(' ')}"/><circle class="route-end" cx="${shownRoute.at(-1).x}" cy="${shownRoute.at(-1).y}" r="9"/>`
     : '';
-  $('live').innerHTML = fire + links + cut + jam + path + people + nodes;
+  $('live').innerHTML = fire + links + cut + jam + path + people + nodes + focusMarkup();
+}
+
+// ---- what just happened -------------------------------------------------------------
+// A banner over the plan says what changed and what to watch for, and a pulsing
+// outline marks where. The log at the bottom of the page is too far away to notice.
+let focus = null; // { until, tone, at: { x, y, r } | { rect } }
+let eventTimer = 0;
+function notice(title, watch, { tone = 'fire', at = null, seconds = 7 } = {}) {
+  const box = $('event');
+  box.className = `event ${tone}`;
+  $('event-title').textContent = title;
+  $('event-watch').innerHTML = watch;
+  box.hidden = false;
+  clearTimeout(eventTimer);
+  eventTimer = setTimeout(() => {
+    box.classList.add('fading');
+    eventTimer = setTimeout(() => (box.hidden = true), 600);
+  }, seconds * 1000);
+  if (at) focus = { at, tone, until: performance.now() + Math.min(seconds, 6) * 1000 };
+}
+function focusMarkup() {
+  if (!focus || performance.now() > focus.until) return '';
+  const a = typeof focus.at === 'function' ? focus.at() : focus.at;
+  if (!a) return '';
+  if (a.rect) return `<rect class="focus ${focus.tone}" x="${a.rect.x - 4}" y="${a.rect.y - 4}" width="${a.rect.w + 8}" height="${a.rect.h + 8}"/>`;
+  return `<circle class="focus ${focus.tone}" cx="${a.x.toFixed(1)}" cy="${a.y.toFixed(1)}" r="${a.r ?? 30}"/>`;
+}
+const nodeAt = (id, r) => () => {
+  const n = sim.node(id);
+  return n && { x: n.x, y: n.y, r };
+};
+const roomAt = (id) => ({ rect: ROOMS[id] });
+
+// Events the incident produces by itself, announced as they happen.
+let seenLog = 0;
+let lastReconverge = null;
+function announceSim() {
+  const fresh = sim.log.filter((e) => e.n > seenLog).reverse();
+  if (sim.log.length) seenLog = Math.max(seenLog, sim.log[0].n);
+  for (const e of fresh) {
+    let m;
+    if ((m = e.text.match(/^MAYDAY\. (Responder \d+) is down/))) {
+      const id = sim.nodes.find((n) => n.label === m[1])?.id;
+      notice(`Mayday: ${id} is down`, 'Watch the <b>nearest free teammate</b>: nobody assigns the rescue, they break off on their own.', { at: id && nodeAt(id, 34) });
+    } else if ((m = e.text.match(/^(Responder \d+) breaks off to reach (Responder \d+)/))) {
+      const id = sim.nodes.find((n) => n.label === m[1])?.id;
+      notice(`${id} breaks off to help`, `It saw the mayday in its own copy. Watch it walk to ${m[2].replace('Responder ', 'R')}.`, { tone: 'go', at: id && nodeAt(id, 30) });
+    } else if ((m = e.text.match(/^(Responder \d+) has reached (Responder \d+)/))) {
+      const id = sim.nodes.find((n) => n.label === m[1])?.id;
+      notice(`${id} has ${m[2].replace('Responder ', 'R')}`, 'They come out <b>together</b>, at the casualty\'s pace, all the way to the assembly point.', { tone: 'go', at: id && nodeAt(id, 36) });
+    } else if ((m = e.text.match(/^Flashover in (.+?)\./))) {
+      const id = ROOM_IDS.find((r) => ROOMS[r].name === m[1]);
+      notice(`Flashover in ${m[1]}`, 'The whole room ignites and its doors are lost. Sensors in it die; the room turns <b>unknown</b>, never empty.', { at: id && roomAt(id) });
+    } else if ((m = e.text.match(/^(Responder \d+) is pulling out/))) {
+      const id = sim.nodes.find((n) => n.label === m[1])?.id;
+      notice(`${id} pulls out on their own`, 'Their way out is heating towards 240°C. They leave while it is still passable, without being told.', { tone: 'hazard', at: id && nodeAt(id, 30) });
+    }
+  }
+  const r = sim.metrics().reconverge;
+  if (r !== null && r !== lastReconverge) {
+    lastReconverge = r;
+    notice(`All nodes agree again after ${r.toFixed(1)} s`, 'Every sensor and firefighter now holds the same picture. Nothing was lost while they could not hear each other.', { tone: 'go' });
+  }
+}
+
+function drawTicker() {
+  $('ticker').innerHTML = sim.log
+    .slice(0, 3)
+    .map((l) => `<li class="${l.kind}"><time>${clock(l.t)}</time><span>${l.text}</span></li>`)
+    .join('');
 }
 
 // ---- panels -------------------------------------------------------------------
@@ -132,6 +202,8 @@ function drawPanels() {
     })
     .join('');
   latest = { belief, hc, alarm: sim.alarm, viewer: node.label };
+  announceSim();
+  drawTicker();
   if (!briefHeld()) $('brief').textContent = ruleBrief(belief, hc, sim.alarm);
 
   // who believes what
@@ -191,11 +263,17 @@ const rankKind = (n) => ({ post: 0, responder: 1, room: 2, door: 3 })[n.kind];
 const short = (n) => (n.kind === 'post' ? 'Post' : n.kind === 'responder' ? n.id : n.kind === 'room' ? ROOMS[n.room].name : n.label);
 
 // ---- controls -----------------------------------------------------------------
-$('alarm').addEventListener('click', () => sim.raiseAlarm());
+$('alarm').addEventListener('click', () => {
+  sim.raiseAlarm();
+  const fire = ROOM_IDS.find((r) => sim.rooms[r].burning);
+  notice('Alarm raised', `Fire in <b>${fire ? ROOMS[fire].name : 'the building'}</b>. People start to leave and the firefighters arrive and split the search between them.`, { at: fire && roomAt(fire) });
+});
 $('cut').addEventListener('click', (e) => {
   sim.setCut(!sim.cut);
   e.currentTarget.setAttribute('aria-pressed', String(sim.cut));
   e.currentTarget.textContent = sim.cut ? 'Restore the link' : 'Cut the link';
+  if (sim.cut) notice('Link down between the two wings', 'Nodes on each side can no longer hear the other side. Watch <b>What each node believes</b>: the columns start to disagree, and rooms on the far side turn <b>unknown</b>. Everyone keeps working.', { at: { rect: { x: sim.cutX - 6, y: bounds().minY, w: 12, h: bounds().maxY - bounds().minY } }, seconds: 9 });
+  else notice('Link restored', 'The two sides can hear each other again. The copies merge, and <b>Agreed again after</b> shows how long it took.', { tone: 'go' });
 });
 const MODE_HELP = {
   inspect: 'Click a sensor or firefighter to see the building as it believes it.',
@@ -212,11 +290,15 @@ function setMode(next) {
   map.dataset.mode = mode;
 }
 for (const b of document.querySelectorAll('[data-mode]')) b.addEventListener('click', () => setMode(b.dataset.mode));
-$('jam').addEventListener('click', () => sim.jam(10));
+$('jam').addEventListener('click', () => {
+  sim.jam(10);
+  notice('Radio jammed for 10 seconds', 'Nothing gets through: <b>Radio messages lost</b> goes to 100% and the links stop flashing. Every node keeps working from its own copy. When it ends, watch <b>Agreed again after</b>.', { seconds: 10 });
+});
 $('fire-speed').addEventListener('click', (e) => {
   const next = sim.fireSpeed === 1 ? 2 : sim.fireSpeed === 2 ? 4 : 1;
   sim.setFireSpeed(next);
   e.currentTarget.textContent = `Fire speed ${next}x`;
+  notice(`Fire now spreads at ${next}x`, next > 1 ? 'Every second changes the right decision. Watch sensors die and crews pull out sooner.' : 'Back to normal speed.', { tone: next > 1 ? 'fire' : 'go', seconds: 4 });
 });
 $('pause').addEventListener('click', (e) => {
   paused = !paused;
@@ -234,6 +316,10 @@ $('reset').addEventListener('click', () => {
   $('cut').textContent = 'Cut the link';
   $('fire-speed').textContent = 'Fire speed 1x';
   shownRoute = null;
+  seenLog = 0;
+  lastReconverge = null;
+  focus = null;
+  $('event').hidden = true;
   drawPanels();
 });
 $('speak').addEventListener('click', async (e) => {
@@ -276,15 +362,49 @@ function pick(e) {
   const kind = id ? sim.node(id).kind : null;
   if (mode === 'sever') {
     const key = e.target.closest?.('.linkhit')?.dataset.link;
-    if (key) sim.sever(key);
+    if (!key) return;
+    sim.sever(key);
+    const [a, b] = key.split('|').map((k) => sim.node(k));
+    const cut = sim.severed.has(key);
+    notice(
+      cut ? `Radio link cut: ${a.label} ↔ ${b.label}` : `Radio link restored: ${a.label} ↔ ${b.label}`,
+      cut ? 'The red dashed line is the lost link. News still gets through <b>around it</b>, passed on by other nodes.' : 'Watch <b>Agreed again after</b> in Live measures.',
+      { tone: cut ? 'fire' : 'go', at: { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2, r: 24 } },
+    );
   } else if (mode === 'ignite') {
-    const room = e.target.id?.startsWith('fill-') ? e.target.id.slice(5) : g && kind === 'room' ? sim.node(id).room : null;
-    if (room) sim.ignite(room);
-  } else if (mode === 'door' && kind === 'door') sim.blockDoor(id);
-  else if (mode === 'kill' && (kind === 'door' || kind === 'room')) sim.toggleNode(id);
-  else if (mode === 'mayday' && kind === 'responder') sim.mayday(id);
-  else if (mode === 'inspect' && id) viewer = id;
-  else return;
+    // Whatever was clicked (the floor, the room's name, its count, a person),
+    // the room is the one under the pointer. The smallest one wins where they nest.
+    let room = g && kind === 'room' ? sim.node(id).room : null;
+    if (!room && Number.isFinite(e.clientX)) {
+      const p = new DOMPoint(e.clientX, e.clientY).matrixTransform(map.getScreenCTM().inverse());
+      room = ROOM_IDS.filter((r) => p.x >= ROOMS[r].x && p.x <= ROOMS[r].x + ROOMS[r].w && p.y >= ROOMS[r].y && p.y <= ROOMS[r].y + ROOMS[r].h).sort((a, b) => ROOMS[a].w * ROOMS[a].h - ROOMS[b].w * ROOMS[b].h)[0] ?? null;
+    }
+    if (!room && e.target.id?.startsWith('fill-')) room = e.target.id.slice(5);
+    if (!room) return;
+    const was = sim.rooms[room].burning;
+    sim.ignite(room);
+    if (was) notice(`${ROOMS[room].name} is already burning`, 'Pick another room.', { tone: 'hazard', at: roomAt(room), seconds: 3 });
+    else notice(`Fire started in ${ROOMS[room].name}`, 'Heat and smoke spread <b>through the doorways</b>. Sensors die at 250°C and their rooms turn <b>unknown</b>. Watch the firefighters re-plan around it.', { at: roomAt(room) });
+  } else if (mode === 'door' && kind === 'door') {
+    sim.blockDoor(id);
+    notice(`Doorway collapsed: ${sim.node(id).label}`, 'Nobody can pass. The first firefighter to reach it reports it, and from then on <b>every route avoids it</b>.', { at: nodeAt(id, 24) });
+  } else if (mode === 'kill' && (kind === 'door' || kind === 'room')) {
+    sim.toggleNode(id);
+    const n = sim.node(id);
+    const room = n.kind === 'room' ? ROOMS[n.room].name : null;
+    if (n.alive) notice(`${n.label} back on`, 'It starts reporting again, and its room fills back in.', { tone: 'go', at: nodeAt(id, 24) });
+    else notice(`Sensor killed: ${n.label}`, room ? `Watch <b>${room}</b>: with no fresh reading it turns <b>unknown</b> within seconds, never "empty".` : 'This doorway stops counting. The rooms on each side lose their count and turn <b>unknown</b> unless another sensor or a firefighter sees them.', { at: nodeAt(id, 24) });
+  } else if (mode === 'mayday' && kind === 'responder') {
+    const n = sim.node(id);
+    if (n.room === 'OUT' || n.status === 'mayday') {
+      notice(`${id} can't go down here`, n.room === 'OUT' ? 'They are outside. Pick a firefighter inside the building.' : 'They are already down.', { tone: 'hazard', at: nodeAt(id, 30), seconds: 3 });
+      return;
+    }
+    sim.mayday(id); // announced by announceSim from the log
+  } else if (mode === 'inspect' && id) {
+    viewer = id;
+    notice(`Now seeing the building as ${sim.node(id).label} believes it`, 'The plan and the right-hand panel show <b>this node\'s own copy</b>. Compare two firefighters during a cut link: their pictures differ.', { tone: 'go', at: nodeAt(id, 30), seconds: 5 });
+  } else return;
   drawPanels();
 }
 // The live layer is redrawn every frame, so the element under the pointer is
