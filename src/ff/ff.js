@@ -102,6 +102,8 @@ function render(feed) {
   $('ff-route').innerHTML = c.route.map((s, i) => `<li class="${i === 0 ? 'now' : ''}">${esc(s)}</li>`).join('');
 
   drawMap(feed.building, c);
+  $('ff-auto').hidden = !c.manual;
+  $('ff-control').textContent = c.manual ? 'You are steering. Tap a room or a green exit.' : 'Tap a room or a green exit to take control.';
   $('ff-picture-note').textContent = `as you believe it`;
   const nb = (k, v, cls = '') => `<div class="${cls}"><dt>${k}</dt><dd>${v}</dd></div>`;
   $('ff-numbers').innerHTML =
@@ -146,11 +148,11 @@ function drawMap(b, c) {
     .map(([id, r]) => {
       const s = c.belief[id] ?? { s: 'unknown' };
       const hot = s.h === 'fire' ? '<rect class="ff-fire" x="X" y="Y" width="W" height="H"/>' : '';
-      return `<rect x="${r.x}" y="${r.y}" width="${r.w}" height="${r.h}" fill="${FILL[s.s] ?? FILL.unknown}" class="ff-room${id === c.target ? ' target' : ''}"/>${hot.replace('X', r.x).replace('Y', r.y).replace('W', r.w).replace('H', r.h)}<text x="${r.x + 8}" y="${r.y + fs + 4}" class="ff-room-name" style="font-size:${fs}px">${esc(r.name)}</text>${s.c ? `<text x="${r.x + r.w - 10}" y="${r.y + r.h - 10}" text-anchor="end" class="ff-room-count" style="font-size:${fs * 2}px">${s.c}</text>` : ''}`;
+      return `<rect data-room="${esc(id)}" x="${r.x}" y="${r.y}" width="${r.w}" height="${r.h}" fill="${FILL[s.s] ?? FILL.unknown}" class="ff-room${id === c.target ? ' target' : ''}"/>${hot.replace('X', r.x).replace('Y', r.y).replace('W', r.w).replace('H', r.h)}<text x="${r.x + 8}" y="${r.y + fs + 4}" class="ff-room-name" style="font-size:${fs}px">${esc(r.name)}</text>${s.c ? `<text x="${r.x + r.w - 10}" y="${r.y + r.h - 10}" text-anchor="end" class="ff-room-count" style="font-size:${fs * 2}px">${s.c}</text>` : ''}`;
     })
     .join('');
   const doors = Object.values(b.doors)
-    .map((d) => `<rect x="${d.x - 7}" y="${d.y - 7}" width="14" height="14" class="ff-door${d.a === 'OUT' || d.b === 'OUT' ? ' exit' : ''}"/>`)
+    .map((d) => (d.a === 'OUT' || d.b === 'OUT' ? `<rect data-room="OUT" x="${d.x - 14}" y="${d.y - 14}" width="28" height="28" class="ff-door exit"/>` : `<rect x="${d.x - 7}" y="${d.y - 7}" width="14" height="14" class="ff-door"/>`))
     .join('');
   const mates = c.mates.map((m) => `<g class="ff-mate${m.age > 10 ? ' ghost' : ''}" transform="translate(${m.x} ${m.y})"><circle r="14"/><text text-anchor="middle" y="5">${m.id.slice(1)}</text><title>${m.id}, heard ${Math.round(m.age)} s ago</title></g>`).join('');
   const self = `<g class="ff-self" transform="translate(${c.x} ${c.y})"><circle r="20" class="ring"/><path d="M0 -14 L13 10 L-13 10 Z"/></g>`;
@@ -160,6 +162,16 @@ function drawMap(b, c) {
       <pattern id="p-unknown" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="1.5" height="6" style="fill:var(--hatch)"/></pattern>
     </defs>${fill}${doors}${mates}${self}`;
 }
+
+// ---- steering -------------------------------------------------------------------------
+$('ff-map').addEventListener('click', (e) => {
+  const room = e.target.closest('[data-room]')?.dataset.room;
+  if (!room || !window.rcState) return;
+  const b = window.rcState.feed.building;
+  send({ type: 'cmd', ff: me.ff, action: 'goto', room });
+  $('ff-control').textContent = `Order sent: go to ${room === 'OUT' ? 'the nearest safe exit' : b.rooms[room]?.name ?? room}.`;
+});
+$('ff-auto').addEventListener('click', () => send({ type: 'cmd', ff: me.ff, action: 'auto' }));
 
 // ---- voice ----------------------------------------------------------------------
 $('ff-voice').addEventListener('click', (e) => {

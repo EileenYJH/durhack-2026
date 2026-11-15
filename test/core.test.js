@@ -430,3 +430,27 @@ test('firefighters can report and be spoken to from the simulation', () => {
   assert.ok(sim.log[0].n > 0, 'entries are numbered for the radio feed');
   assert.equal(sim.report('R1', 'clear'), false, 'cannot report a room from outside');
 });
+
+test('a firefighter can be steered from the phone, refuses a burning room, and goes back to auto', () => {
+  const sim = createSim(6);
+  const run = (sec) => { for (let i = 0; i < sec * 10; i++) sim.step(0.1); };
+  run(5);
+  sim.raiseAlarm();
+  run(2);
+  assert.equal(sim.command('R1', 'B'), 'ok');
+  const r1 = sim.node('R1');
+  assert.equal(r1.manual, true);
+  run(25);
+  assert.equal(r1.room, 'B', 'walked to Lab 2 and stayed there');
+  assert.equal(r1.target === null || r1.target === 'B', true);
+  run(10);
+  assert.equal(r1.room, 'B', 'does not wander off while under control');
+  // a room it believes is burning is refused, with the reason on its radio
+  sim.ignite('E');
+  run(15);
+  const reply = sim.command('R1', 'E');
+  assert.match(reply, /refused|burning|no safe way/i);
+  assert.match(sim.log.find((e) => /^To Responder 1:/.test(e.text)).text, /refused/i);
+  assert.equal(sim.command('R1', 'AUTO'), 'Back on automatic tasking.');
+  assert.equal(r1.manual, false);
+});

@@ -49,6 +49,7 @@ function nodeMarkup(n) {
     const w = Math.max(0, Math.min(1, n.air / 100)) * 30;
     extra = `<rect class="air-track" x="-15" y="17" width="30" height="4"/><rect class="air${n.air < 30 ? ' low' : ''}" x="-15" y="17" width="${w.toFixed(1)}" height="4"/>`;
     if (n.status === 'mayday') extra += `<circle class="mayday-ring" r="26"/><text class="mayday-text" text-anchor="middle" y="-22">MAYDAY</text>`;
+    else if (n.manual) extra += `<circle class="manual-ring" r="25"/><text class="manual-text" text-anchor="middle" y="-22">PHONE</text>`;
   }
   return `<g class="${cls}${n.status === 'mayday' ? ' mayday' : ''}" data-id="${n.id}" transform="translate(${n.x.toFixed(1)} ${n.y.toFixed(1)})" tabindex="0" role="button" aria-label="${n.label}">
     <circle class="ring" r="${ring}"/>${body}${text}${dead}${extra}<title>${n.label}${n.alive ? '' : ' (failed)'}</title></g>`;
@@ -375,6 +376,11 @@ function crewFeed() {
       else if (n.mission) {
         goal = n.target;
         directive = `Reach ${sim.node(n.mission).id} in ${ROOMS[n.target]?.name ?? 'the building'}. Teammate down.`;
+      } else if (n.manual && n.target) {
+        goal = n.target;
+        directive = `Going to ${ROOMS[n.target].name}, your order. ${belief[n.target].why}.`;
+      } else if (n.manual) {
+        directive = `Under your control in ${roomName}. Tap a room to move.`;
       } else if (n.target) {
         goal = n.target;
         directive = `Search ${ROOMS[n.target].name}. ${belief[n.target].why}.`;
@@ -398,6 +404,7 @@ function crewFeed() {
         label: n.label,
         alive: n.alive,
         status: n.status,
+        manual: n.manual,
         air: Math.round(n.air),
         room: n.room,
         roomName,
@@ -435,6 +442,10 @@ function applyPhone(msg) {
       const where = n.room === 'OUT' ? 'outside' : `in ${ROOMS[n.room].name}, a corridor`;
       sim.tell(msg.ff, `You are ${where}. Report from inside the room you searched.`);
     }
+  } else if (msg.action === 'goto' && typeof msg.room === 'string') {
+    sim.command(msg.ff, msg.room);
+  } else if (msg.action === 'auto') {
+    sim.command(msg.ff, 'AUTO');
   } else if (msg.action === 'out') {
     const hz = buildingHazard(n.rep, ROOM_IDS, sim.t);
     const avoid = fireRooms(hz);

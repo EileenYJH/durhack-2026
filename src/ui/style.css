@@ -404,3 +404,12 @@ body.ff.mayday .ff-top { background: #3a0b12; }
 .ff-call-status.ok { color: #3fbf7f; }
 .ff-call-status.bad { color: #f0475c; }
 .ff-call-log { max-height: 30vh; }
+
+/* ---- steering from the phone ---- */
+.ff-control-row { display: flex; gap: 8px; align-items: center; justify-content: space-between; margin-top: 4px; }
+.ff-control { margin: 0; font-size: 14px; color: #f2bd2b; }
+#ff-auto { background: #172128; color: #e4eae7; border-color: #e4eae7; padding: 8px 10px; font-size: 13px; white-space: nowrap; }
+#ff-map [data-room] { cursor: pointer; }
+#ff-map .ff-room:active { stroke: #f2bd2b; stroke-width: 8; }
+#map .manual-ring { fill: none; stroke: var(--hazard); stroke-width: 3; stroke-dasharray: 5 4; }
+#map .manual-text { font-size: 12px; font-weight: 700; fill: var(--hazard) !important; letter-spacing: 0.08em; paint-order: stroke; stroke: var(--sheet); stroke-width: 3px; }

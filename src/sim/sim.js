@@ -167,7 +167,7 @@ export function createSim(seed = 7) {
   addNode({ id: 'POST', kind: 'post', label: 'Command post', ...at(60, 0) });
   [[40, -55], [40, 55], [85, -40]].forEach(([along, across], i) => {
     const home = at(along, across);
-    addNode({ id: `R${i + 1}`, kind: 'responder', label: `Responder ${i + 1}`, room: 'OUT', ...home, home, path: [], speed: 70, target: null, mission: null, searching: 0, air: 100 - i * 9, status: 'ok', refused: {}, checked: {} });
+    addNode({ id: `R${i + 1}`, kind: 'responder', label: `Responder ${i + 1}`, room: 'OUT', ...home, home, path: [], speed: 70, target: null, mission: null, searching: 0, air: 100 - i * 9, status: 'ok', refused: {}, checked: {}, manual: false });
   });
 
   const byId = Object.fromEntries(sim.nodes.map((n) => [n.id, n]));
@@ -440,7 +440,7 @@ export function createSim(seed = 7) {
       .map((n) => {
         const c = node.rep.claims[n.id];
         if (!c) return { id: n.id, room: 'OUT', x: n.home.x, y: n.home.y, status: 'ok', age: 0 };
-        return { id: n.id, room: c.room, x: c.x, y: c.y, status: c.status ?? 'ok', age: sim.t - c.at };
+        return { id: n.id, room: c.room, x: c.x, y: c.y, status: c.status ?? 'ok', age: sim.t - c.at, manual: Boolean(c.manual), target: c.target };
       });
   }
 
@@ -465,7 +465,7 @@ export function createSim(seed = 7) {
   function responderTick(node) {
     const here = sim.rooms[node.room];
     if (here) writeEnv(node.rep, node.room, node.id, { room: node.room, temp: here.heat, rate: here.rate, smoke: here.smoke }, sim.t);
-    writeClaim(node.rep, node.id, { target: node.target, room: node.room, x: node.x, y: node.y, status: node.status, air: Math.round(node.air) }, sim.t);
+    writeClaim(node.rep, node.id, { target: node.target, room: node.room, x: node.x, y: node.y, status: node.status, air: Math.round(node.air), manual: node.manual }, sim.t);
     if (!sim.alarm || node.status === 'mayday' || node.searching > 0) return;
 
     if (node.status === 'refill') {
@@ -477,7 +477,7 @@ export function createSim(seed = 7) {
       }
       node.air = 100;
       node.status = 'ok';
-      say(`${node.label} has fresh air and is going back in`, 'ok');
+      say(node.manual ? `To ${node.label}: Fresh cylinder. Waiting for your orders.` : `${node.label} has fresh air and is going back in`, 'ok');
     }
     const hazards = buildingHazard(node.rep, ROOM_IDS, sim.t);
     const blocked = blockedDoors(node.rep);
@@ -515,9 +515,15 @@ export function createSim(seed = 7) {
       }
     }
 
+    // Under the phone's control: self-preservation above still applies, but
+    // tasking is left to the person holding the phone.
+    if (node.manual) return;
+
     // A teammate in trouble comes before any search.
     const down = peers.filter((p) => (p.status === 'mayday' || (p.age > PRESUMED_DOWN && p.room !== 'OUT')) && sim.t - (node.checked[p.id] ?? -999) > 60 && p.room !== 'OUT');
-    const team = [{ id: node.id, room: node.room, x: node.x, y: node.y }, ...peers.filter((p) => p.status === 'ok' && p.age < CLAIM_TTL)];
+    // Teammates under manual control are not counted on for rescue or searches,
+    // and the room they were sent to is theirs.
+    const team = [{ id: node.id, room: node.room, x: node.x, y: node.y }, ...peers.filter((p) => p.status === 'ok' && p.age < CLAIM_TTL && !p.manual)];
     if (down.length) {
       const victim = down[0];
       const reach = (r) => routeLength({ x: r.x, y: r.y }, r.room, victim.room, avoid, blocked);
@@ -538,6 +544,7 @@ export function createSim(seed = 7) {
     }
 
     const skip = new Set(Object.keys(node.refused).filter((r) => sim.t - node.refused[r] < 30));
+    for (const p of peers) if (p.manual && p.target && p.age < CLAIM_TTL) skip.add(p.target);
     let target = assign(belief, team, { hazards, blocked, skip })[node.id];
     // Keep going to the current room unless it no longer needs a search or
     // something more urgent has come up. Stops responders dithering.
@@ -779,6 +786,51 @@ export function createSim(seed = 7) {
     else writeReport(n.rep, n.room, n.id, { state: 'still', count: 1, conf: 0.95, kind: 'search' }, sim.t);
     say(what === 'clear' ? `${n.label} searched ${ROOMS[n.room].name}: clear` : `${n.label} found 1 in ${ROOMS[n.room].name}`, what === 'clear' ? 'ok' : 'warn');
     return true;
+  };
+
+  // An order from the firefighter's phone: go to a room (or 'OUT'), or 'AUTO'
+  // to hand control back. Returns what happened, in words.
+  sim.command = (id, room) => {
+    const n = byId[id];
+    if (n?.kind !== 'responder') return 'No such firefighter.';
+    const tell = (text) => {
+      sim.tell(id, text);
+      return text;
+    };
+    if (!n.alive) return 'No contact with that firefighter.';
+    if (room === 'AUTO') {
+      if (!n.manual) return tell('Already on automatic tasking.');
+      n.manual = false;
+      n.target = null;
+      return tell('Back on automatic tasking.');
+    }
+    if (n.status === 'mayday') return tell('You are down. Stay where you are, help is coming.');
+    if (n.status === 'low-air' || n.status === 'refill') return tell('Order refused: you are withdrawing on low air.');
+    if (room !== 'OUT' && !(room in ROOMS)) return tell('That place is not on the plan.');
+    const hazards = buildingHazard(n.rep, ROOM_IDS, sim.t);
+    const blocked = blockedDoors(n.rep);
+    const avoid = fireRooms(hazards);
+    if (room !== 'OUT' && hazards[room]?.level === 'fire' && room !== n.room) return tell(`Order refused: ${ROOMS[room].name} is believed to be burning.`);
+    avoid.delete(room);
+    if (n.room !== 'OUT') avoid.delete(n.room);
+    if (room === n.room) {
+      n.manual = true;
+      n.target = room === 'OUT' ? null : room;
+      n.path = [];
+      if (n.target) n.searching = 3;
+      return tell(room === 'OUT' ? 'You are already outside. Holding.' : `You are already in ${ROOMS[room].name}. Searching it.`);
+    }
+    n.manual = true;
+    n.mission = null;
+    n.searching = 0;
+    const ok = room === 'OUT' ? goOut(n, avoid, blocked) : goTo(n, room, avoid, blocked);
+    if (!ok) {
+      n.target = null;
+      return tell(`Order refused: no safe way to ${room === 'OUT' ? 'an exit' : ROOMS[room].name} avoiding the fire.`);
+    }
+    n.target = room === 'OUT' ? null : room;
+    say(room === 'OUT' ? `To ${n.label}: Leave by the nearest safe exit. Ordered from your phone.` : `${n.label} heads for ${ROOMS[room].name}. Ordered from your phone.`, 'act');
+    return 'ok';
   };
 
   sim.mayday = (id) => {
