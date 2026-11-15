@@ -203,3 +203,54 @@ export function setupCall() {
 
 // For checks from the console.
 export const tools = TOOLS;
+
+// A typed conversation with the same agent and tools, for the recorded demo
+// (a recording has no microphone). ask() resolves with Command's reply.
+window.rcTextCall = {
+  replies: [],
+  async start() {
+    const res = await fetch('/api/voice-signed-url');
+    const { url, error } = await res.json();
+    if (!url) throw new Error(error ?? 'no signed url');
+    const { Conversation } = await import(SDK);
+    const s = current();
+    startedAt = s?.feed.t ?? 0;
+    lastOrder = s?.c.directive ?? '';
+    for (const r of s?.feed.radio ?? []) told.add(r.n);
+    window.rcCallActive = true;
+    $('ff-call-log').hidden = false;
+    $('ff-call').textContent = 'End call';
+    $('ff-call').classList.add('live');
+    setStatus('On air with Command.', 'ok');
+    convo = await Conversation.startSession({
+      signedUrl: url,
+      textOnly: true,
+      connectionType: 'websocket',
+      dynamicVariables: { ff: window.rcState?.me.ff ?? 'R1' },
+      clientTools: TOOLS,
+      onMessage: (m) => {
+        const who = (m.source ?? m.role) === 'user' ? 'You' : 'Command';
+        if (!m.message) return;
+        if (who === 'Command') this.replies.push(m.message);
+        line(who, m.message);
+      },
+    });
+  },
+  async ask(text) {
+    const before = this.replies.length;
+    convo.sendUserMessage(text);
+    line('You', text);
+    const t0 = Date.now();
+    while (this.replies.length === before && Date.now() - t0 < 30000) await new Promise((r) => setTimeout(r, 150));
+    await new Promise((r) => setTimeout(r, 1200)); // a reply can arrive in parts
+    return this.replies.slice(before).join(' ');
+  },
+  async firstLine() {
+    const t0 = Date.now();
+    while (!this.replies.length && Date.now() - t0 < 15000) await new Promise((r) => setTimeout(r, 150));
+    return this.replies[0] ?? '';
+  },
+  async end() {
+    await stop();
+  },
+};

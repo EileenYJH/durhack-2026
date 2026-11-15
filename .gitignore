@@ -9,3 +9,7 @@ service-account*.json
 *-key.json
 vertex-key*.json
 application_default_credentials.json
+
+# demo recording inputs and outputs (not committed)
+demo-assets/
+demo-video/

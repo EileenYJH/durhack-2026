@@ -805,7 +805,8 @@ export function createSim(seed = 7) {
       return tell('Back on automatic tasking.');
     }
     if (n.status === 'mayday') return tell('You are down. Stay where you are, help is coming.');
-    if (n.status === 'low-air' || n.status === 'refill') return tell('Order refused: you are withdrawing on low air.');
+    if (n.status === 'refill') return tell('Order refused: you are changing your cylinder at the entrance.');
+    if (n.status === 'low-air') return tell(n.air < 30 ? 'Order refused: you are withdrawing on low air.' : 'Order refused: you are pulling out, your way out is at risk.');
     if (room !== 'OUT' && !(room in ROOMS)) return tell('That place is not on the plan.');
     const hazards = buildingHazard(n.rep, ROOM_IDS, sim.t);
     const blocked = blockedDoors(n.rep);

@@ -1,4 +1,4 @@
-// Roll Call server. No dependencies: node server.js
+// ARIA server. No dependencies: node server.js
 //
 // It does three small jobs:
 //   1. serves the static files;
@@ -205,6 +205,16 @@ async function brief(req, res) {
 
 // A short-lived token so a phone can open a live voice call with the Command
 // agent without ever seeing the API key.
+// A signed link for a typed (text-only) conversation with the same agent,
+// used by the recorded demo, which has no microphone.
+async function voiceSignedUrl(req, res) {
+  if (!ELEVEN_KEY || !ELEVEN_AGENT) return send(res, 503, { error: 'Voice calls need ELEVENLABS_API_KEY and ELEVENLABS_AGENT_ID.' });
+  const r = await fetch(`https://api.elevenlabs.io/v1/convai/conversation/get-signed-url?agent_id=${encodeURIComponent(ELEVEN_AGENT)}`, { headers: { 'xi-api-key': ELEVEN_KEY } });
+  const out = await r.json().catch(() => ({}));
+  if (!r.ok || !out.signed_url) return send(res, 502, { error: `ElevenLabs returned ${r.status}` });
+  send(res, 200, { url: out.signed_url });
+}
+
 async function voiceToken(req, res) {
   if (!ELEVEN_KEY || !ELEVEN_AGENT) return send(res, 503, { error: 'Voice calls need ELEVENLABS_API_KEY and ELEVENLABS_AGENT_ID.' });
   const r = await fetch(`https://api.elevenlabs.io/v1/convai/conversation/token?agent_id=${encodeURIComponent(ELEVEN_AGENT)}`, { headers: { 'xi-api-key': ELEVEN_KEY } });
@@ -213,9 +223,23 @@ async function voiceToken(req, res) {
   send(res, 200, { token: out.token });
 }
 
+// Named voices for the demo video: a narrator, a firefighter on the radio, and
+// Command (the same voice as the live agent). They use the newest, most
+// expressive model, which performs cues such as [panting] instead of reading them.
+const NAMED_VOICES = { narrator: 'onwK4e9ZLuTAKqWW03F9', firefighter: 'pNInz6obpgDQGcFmaJgB', command: ELEVEN_VOICE };
+
 async function speak(req, res) {
   if (!ELEVEN_KEY) return send(res, 503, { error: 'no ELEVENLABS_API_KEY set' });
-  const { text } = JSON.parse(await readBody(req));
+  const { text, voice } = JSON.parse(await readBody(req));
+  if (voice && NAMED_VOICES[voice]) {
+    const r = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${NAMED_VOICES[voice]}?output_format=mp3_44100_128`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'xi-api-key': ELEVEN_KEY },
+      body: JSON.stringify({ text: String(text).slice(0, 800), model_id: 'eleven_v4' }),
+    });
+    if (!r.ok) return send(res, 502, { error: `ElevenLabs returned ${r.status}`, detail: (await r.text()).slice(0, 300) });
+    return send(res, 200, Buffer.from(await r.arrayBuffer()), 'audio/mpeg');
+  }
   const r = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${ELEVEN_VOICE}?output_format=mp3_44100_128`, {
     method: 'POST',
     headers: { 'content-type': 'application/json', 'xi-api-key': ELEVEN_KEY },
@@ -259,10 +283,11 @@ const server = http.createServer(async (req, res) => {
     if (url.pathname === '/mesh/stream' && req.method === 'GET') return stream(req, res, mesh, id);
     if (url.pathname === '/mesh/send' && req.method === 'POST') return await relay(req, res, mesh, id);
     if (url.pathname === '/api/status') return send(res, 200, { gemini: gemini.ready(), provider: gemini.provider, elevenlabs: Boolean(ELEVEN_KEY), voiceAgent: Boolean(ELEVEN_KEY && ELEVEN_AGENT), peers: meshes.get(mesh)?.size ?? 0 });
-    if (['/api/brief', '/api/speak', '/api/layout', '/api/directions', '/api/voice-parse', '/api/voice-report', '/api/voice-token'].includes(url.pathname) && limited(req)) return send(res, 429, { error: 'Too many requests. Wait a minute.' });
+    if (['/api/brief', '/api/speak', '/api/layout', '/api/directions', '/api/voice-parse', '/api/voice-report', '/api/voice-token', '/api/voice-signed-url'].includes(url.pathname) && limited(req, 120)) return send(res, 429, { error: 'Too many requests. Wait a minute.' });
     if (url.pathname === '/api/brief' && req.method === 'POST') return await brief(req, res);
     if (url.pathname === '/api/speak' && req.method === 'POST') return await speak(req, res);
     if (url.pathname === '/api/voice-token' && req.method === 'GET') return await voiceToken(req, res);
+    if (url.pathname === '/api/voice-signed-url' && req.method === 'GET') return await voiceSignedUrl(req, res);
     if (url.pathname === '/api/layout' && req.method === 'POST') return await layout(req, res);
     if (url.pathname === '/api/directions' && req.method === 'POST') return await directions(req, res);
     if (url.pathname === '/api/voice-parse' && req.method === 'POST') return await voiceParse(req, res);
@@ -279,6 +304,6 @@ const server = http.createServer(async (req, res) => {
 });
 
 server.listen(PORT, HOST, () => {
-  console.log(`Roll Call on http://localhost:${PORT}  (simulation: /, live nodes: /live.html)`);
+  console.log(`ARIA on http://localhost:${PORT}  (simulation: /, live nodes: /live.html)`);
   console.log(`Gemini: ${gemini.ready() ? `on, ${gemini.describe()}` : `off (${gemini.problem()})`}   ElevenLabs voice: ${ELEVEN_KEY ? 'on' : 'off'}`);
 });
