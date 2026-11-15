@@ -1,143 +1,111 @@
-# ARIA: Distributed Occupancy Intelligence for Fireground Operations
+# ARIA: who is still inside, even when the building is burning around the answer
+
+**Live demo:** https://durhack-2026-production.up.railway.app · **Repository:** https://github.com/EileenYJH/durhack-2026 · **Gemini project number:** 577567729000
 
 ## Inspiration
 
-The project was inspired by a fundamental problem in structural firefighting: **situational awareness collapses when communications fail**. In a working fire, conditions change every 30–60 seconds. Crews rely on voice radio updates while wearing SCBA masks in zero visibility — leading to misheard room numbers, stale mental models, and duplicated searches. When a stairwell collapses or a radio channel saturates, the incident commander loses visibility exactly when they need it most.
+At a building fire, the incident commander keeps making the same decision: send crews in to search, or fight the fire from outside. That decision depends on one question nobody can answer well: **who is still inside, and where?**
 
-We asked: *What if every firefighter carried a live map that didn't need a central server to stay accurate?*
+Today the answer is put together from:
+- a paper roll call at the assembly point;
+- a fire alarm panel that knows where the smoke is, but not where the people are;
+- badge systems that know who came in, but not who is still in which room;
+- radio messages on one crowded channel.
 
-## What We Learned
+And the fire attacks the tools themselves: sensors burn, radio fades behind concrete and in smoke, and the commander loses the picture exactly when it matters most.
 
-1. **Eventual consistency works for life safety** — Identical deterministic algorithms running on independent replicas produce the same search order without coordination. The math of CRDTs applies directly to fireground priorities.
+I asked: what if every sensor and every firefighter kept **its own copy of the picture**, and the copies agreed again whenever they could hear each other?
 
-2. **Cognitive load is the real constraint** — Firefighters under heat stress cannot process raw sensor feeds. The system must distill all inputs into one directive: "Search Room 102 first — 2 people not moving, safe route via West Corridor."
+## What it does
 
-3. **Opportunistic sync beats always-on** — In concrete stairwells, radios drop. A system that caches locally and merges on reconnect (data muling via peer-to-peer handoff) is more reliable than one requiring constant connectivity.
+- **Photo → building.** Upload a photo of the fire evacuation plan from the wall. Gemini reads the rooms and doors; ARIA repairs the gaps (snaps walls, adds missing doors, exits and corridors), lists every repair, and keeps the photo underneath so a person can check every wall. The building cannot be used until it passes the checks.
+- **Every node keeps its own picture.** Door counters, room sensors, firefighters and the command post each hold a copy of the shared state and work out, for every room, one of: occupied and still, occupied, possibly occupied, **unknown**, or confirmed empty. Each state comes with the reason and how fresh it is.
+- **Nobody hands out rooms.** Each firefighter runs the same rules on its own copy, so they arrive at the same search order and split the rooms without a radio call. Each also publishes a claim ("I'm going to Lab 2") that the others respect.
+- **It keeps working when things break.** Cut the radio between two wings, jam all radio, collapse a doorway, kill a sensor, start a second fire: every node keeps deciding from what it last heard. A room nobody can hear from turns **unknown, never empty**. When the link comes back, the copies agree again.
+- **A fire that fights back.** Heat and smoke spread through doorways; sensors fail in the heat; smoke blinds cameras and weakens radio; rooms flash over; people collapse; firefighters run on limited air and pull out while their way out is still below 240°C.
+- **Crews look after each other.** When a firefighter calls a mayday, the nearest free teammate sees it in its own copy, breaks off, walks to them and brings them out together. No commander has to assign the rescue.
+- **A firefighter phone.** Scan a QR code and a phone becomes one firefighter: their current order, turn-by-turn route, air, their own picture of the building, and radio messages (read aloud if voice is on). Buttons: room clear, casualty here, way out, mayday. Tap a room to steer the firefighter; ARIA refuses an order into a room believed to be burning, and says why.
+- **Talk to Command.** A live two-way voice call with an ElevenLabs agent that answers only from this firefighter's live data, through four tools. The firefighter can interrupt it at any time. Urgent orders are spoken into the call as soon as the agent is listening, never on top of it.
+- **A spoken commander's brief.** Gemini writes a short brief from the command post's data, and ElevenLabs reads it. If Gemini calls any room empty that the data does not confirm, the brief is thrown away and a rule-based brief is read instead.
 
-4. **Software-only deployment matters** — Hardware dependencies (gateways, beacons, dedicated mesh nodes) fail in procurement. A solution running on existing phones/tablets/laptops via browser gets adopted.
+## How I built it
 
-## How We Built It
+Plain JavaScript modules in the browser, and one small Node server with no dependencies and no build step.
 
-### Architecture: Local-First Replicated State
+| Part | What it does | How |
+|---|---|---|
+| `src/core/replica.js` | Each node's copy of the shared state | Every record has **exactly one writer** and a sequence number only that writer increases. Merging keeps the higher sequence, so copies converge whatever order messages arrive in, however often they repeat. Records carry their **age**, not a timestamp, so device clocks never have to agree. |
+| `src/core/belief.js` | Room state from door counts, room sensors and searches | Rule-based, not probabilistic. Sightings decay with age. "Empty" must outlast the last sighting, and is trusted only for a few seconds before the room turns unknown again. A sensor that goes silent while reading hot is presumed burnt. A sensor blinded by smoke says nothing rather than saying "empty". |
+| `src/core/hazard.js` | Each node's belief about heat and fire per room | From its own copy of the sensor and firefighter readings. |
+| `src/core/assign.js` | Who searches which room | An urgency score per room (people not moving first; raised when people are believed to be in a room that is heating up; a burning room with nobody known inside is not searched at all). Then each firefighter, in a fixed order, takes the room with the best urgency minus distance that it can reach without crossing the fire. The fixed order is why everyone arrives at the same assignment without talking. A room a teammate has just attended is left alone. |
+| `src/core/building.js`, `directions.js` | Routes and spoken directions | Breadth-first search over the graph of rooms and doors, avoiding rooms believed on fire and doors reported impassable, then turned into radio-style steps. |
+| `src/core/layout.js`, `planfit.js` | Building model, Gemini import repair | Validation, wall snapping, door placement, added exits and corridors, with a note for every change. |
+| `src/sim/sim.js` | The incident | People, sensors, firefighters, fire, smoke, air, radio links, and the "Break it" controls. |
+| `server.js` | Static files, message relay, AI proxies | The relay only forwards messages and holds no picture of the building. API keys stay on the server, and AI requests are rate limited. |
 
-```
-┌─────────────┐     ┌─────────────┐     ┌─────────────┐
-│ Door Camera │     │ Room Camera │     │  Commander  │
-│  (counts)   │     │ (presence)  │     │  (voice)    │
-└──────┬──────┘     └──────┬──────┘     └──────┬──────┘
-       │                   │                   │
-       ▼                   ▼                   ▼
-┌─────────────────────────────────────────────────────┐
-│              Local Replica (per device)             │
-│  • Door counts (A→B, B→A)                           │
-│  • Room reports (state, count, confidence, age)     │
-│  • Firefighter claims (manual verifications)        │
-└────────────────────┬────────────────────────────────┘
-                     │ Deterministic merge (last-writer-wins per key)
-                     ▼
-┌─────────────────────────────────────────────────────┐
-│           Shared Belief State (identical everywhere)│
-│  • 5-state belief per room: ∅ / occupied / still /  │
-│    possible / unknown                               │
-│  • Priority score: P = f(state, count, age, conf)   │
-└────────────────────┬────────────────────────────────┘
-                     ▼
-┌─────────────────────────────────────────────────────┐
-│                    Outputs                          │
-│  • Search order (ranked by priority)                │
-│  • Turn-by-turn directions (graph routing)          │
-│  • Spoken brief (Gemini → ElevenLabs)               │
-│  • Visual route overlay on floor plan               │
-└─────────────────────────────────────────────────────┘
-```
+**Gemini** runs on Vertex AI (`gemini-3.5-flash`) in my Google Cloud project, with a service account on the hosted copy. It does four jobs: reading the floor plan photo, writing the commander's brief, smoothing route wording (thrown away unless every turn, direction and room name survives unchanged), and acting as the language model inside the voice agent. **None of them make a safety decision**, and every feature still works without Gemini.
 
-### Core Components
+**ElevenLabs** provides the live voice agent (Agents platform: WebRTC call, client tools, turn model `turn_v3` in eager mode so the firefighter can interrupt, `eleven_v4_turbo` voice), with a short-lived token from my server so the key never reaches the phone. It also reads the radio messages, the brief and the routes aloud. The demo video's voices and music were made with ElevenLabs too.
 
-| Module | Responsibility | Key Algorithm |
-|--------|---------------|---------------|
-| `building.js` | Graph model (rooms, doors, exits) | A* routing with dynamic edge weights |
-| `belief.js` | 5-state belief from raw reports | Bayesian update with time decay |
-| `assign.js` | Search priority scoring | $P = w_1 \cdot \text{urgency} + w_2 \cdot \text{count} - w_3 \cdot \text{age}$ |
-| `directions.js` | Turn-by-turn natural language | Vector geometry → radio-style instructions |
-| `replica.js` | CRDT-like local state | LWW per key + causal ordering |
-| `mesh.js` | Opportunistic sync | Epidemic broadcast over WebSocket relay |
+**Why voice:** inside a fire a firefighter cannot look at a screen. Their hands hold a hose, tools or a casualty; their gloves are thick; their mask fogs; smoke can mean zero visibility. Radio is already how they work. A calm, human voice is easier to follow under stress than robotic speech, and the firefighter must be able to cut in ("mayday!") at any moment.
 
-### AI Integration (Zero-UI-Clutter)
+## How I measured it
 
-- **Gemini (Vertex AI)**: Rewrites algorithmic brief/directions into calm, contracted radio English. Safety-checked against ground truth — never claims "empty" unless state = `empty`.
-- **ElevenLabs**: Expressive TTS (`stability=0.3, style=0.6`) for urgent but clear delivery.
-- **Fallback**: Rule-based brief + browser TTS when APIs unavailable.
+`node scripts/evaluate.js 100`: 100 simulated fires of 110 seconds each. Each run has the fire spreading at 1x to 3x, a cut link between the wings, an 8-second radio jam, and up to two extra sensor failures. Every half second, every live node's belief about every room is compared with the truth.
 
-### Simulation & Evaluation
+| Measure | Result |
+|---|---|
+| Occupied room shown as confirmed empty (the unsafe error) | **0.353%** of 469,196 checks |
+| Occupied room shown as unknown (the honest answer) | 3.57% |
+| Empty room shown as occupied (the safe error) | 5.9% |
+| Rooms wrongly empty on the command post at the end of a run | **0 of 100** |
+| Sensors destroyed by the end of a run | 56.8% |
+| Agreement after the link returns | mean 11.1 s, worst 52.7 s |
 
-- 19 autonomous agents (command post, responders, door/room sensors)
-- Simulated people with realistic movement (corridor flow, room occupancy)
-- Configurable network partitions (link cut, radio jam, sensor kill)
-- Safety metric: `evaluate.js` runs 200 Monte Carlo trials measuring:
-  - Time to confirm all occupied rooms
-  - Duplicate search rate
-  - Missed victim rate
-  - Radio traffic reduction
+**What measuring made me fix:**
 
-Results (200 trials, 10 min simulated):
-- **Duplicate searches**: 2.1% (vs 34% baseline without shared state)
-- **Median time to full clearance**: 4:12 (vs 7:48 baseline)
-- **Zero missed victims** in trials with ≥2 door cameras
+| Problem found | Before | After |
+|---|---|---|
+| Firefighters caught in a flashover | 57 in 100 runs | 0, after adding "leave while the way out is still below 240°C" |
+| Searches in total | 1,082 | 571 |
+| Unsafe "empty" (runs without fire) | 1.008% | 0.284%, after making "empty" outlast the last sighting and trusting it for 6 s instead of 22 s |
 
-## Challenges Faced
+**Still weak, and said so:** 29.6% of searches repeat a room another firefighter searched in the last 45 seconds, mostly while the radio is cut or jammed. The fire and survival figures come from simple rules chosen to look plausible, not from a validated fire model, and the sensor error rates are assumptions. Full method and results: `docs/evaluation.md`. There are 53 automated tests (`npm test`).
 
-### 1. Belief Fusion Without Central Authority
-**Problem**: Multiple sensors report conflicting data for the same room (door camera says 2 entered, room camera sees 1 moving). No central node to arbitrate.
-**Solution**: Bayesian belief update with source weighting. Each report carries `conf` (0.6–0.9). State transitions require cumulative evidence:
-$$\text{empty} \xrightarrow{\text{report } \geq 0.8} \text{possible} \xrightarrow{\text{report } \geq 0.8} \text{occupied}$$
-Time decay ($\lambda = 0.05/s$) ages out stale reports automatically.
+## Challenges I ran into
 
-### 2. Routing Around Dynamic Hazards
-**Problem**: Fire blocks corridors mid-search. Routes must recalculate instantly on every node without coordination.
-**Solution**: Shared graph with dynamic edge weights. When any node detects fire in Room X, it publishes `hazard: X`. All replicas immediately re-weight edges adjacent to X → ∞. A* recomputes in <5ms locally. No consensus needed — same input → same output.
+- **Making "no answer" safe.** The easy mistake is to treat a silent sensor as an empty room. In a fire, silence usually means the sensor burnt. Getting the unsafe rate down meant making "empty" hard to earn and quick to expire, at the cost of more rooms showing unknown. That trade is deliberate.
+- **Merging without a referee.** Two copies can disagree about what they have heard, but never about what is true, because every record has one owner. That one rule made merging after a cut instant and order-independent.
+- **Letting AI help without letting it decide.** Gemini is good at messy photos and natural wording, and can be confidently wrong. Every Gemini output is checked against the data, and anything that fails is replaced by the plain rule-based version.
+- **Rescue that really works.** Watching the recorded demo showed the rescuer "reaching" a casualty from across a big hall and the two leaving separately. Now the rescuer crosses the room, and the casualty stays at the rescuer's side all the way to the assembly point. A test checks it.
 
-### 3. Voice Input in SCBA Conditions
-**Problem**: Browser `SpeechRecognition` fails with mask muffling + PASS alarm noise.
-**Solution**: Two-tier approach for demo:
-- **Tier 1**: Bluetooth PTT button + directional mic (hardware, $15)
-- **Tier 2**: Cloud STT (Deepgram Nova-2) with noise suppression
-- **Fallback**: Large on-screen buttons for "Mark Clear / Found People / Blocked"
+## Accomplishments I'm proud of
 
-### 4. Zero-Dependency Deployment
-**Requirement**: Must run on any phone/laptop via HTTPS, no install, no build step.
-**Solution**: Pure ES modules, no bundler, no framework. `node server.js` serves static files + mesh relay + AI proxies. Deploy to Vultr + Caddy in 2 minutes (`deploy/deploy.sh`).
+- Under failure it says **"unknown"** instead of pretending, and it is measured to do so.
+- A live voice agent a firefighter can interrupt, grounded in that firefighter's own picture of the building.
+- A real building (the Teaching and Learning Centre where DurHack is held) imported from a photo of its evacuation plan.
+- Solo, in 24 hours, with numbers to back the claims.
 
-### 5. Safety-Critical Correctness
-**Constraint**: System must never tell a crew a room is empty when it isn't.
-**Defense in depth**:
-1. Belief state: `empty` only after 3 consecutive zero-count reports ≥30s apart
-2. Brief generator: Hard-coded rule — "Never say confirmed empty unless state = empty"
-3. Gemini output validator: `unsafeClaim()` scans for "empty/clear/nobody" + room name + no negation → discards entire brief
-4. Test suite: Property-based tests verifying monotonicity of belief states
+## What I learned
 
-## Technical Stack
+- In a distributed system for emergencies, the hardest part is not sharing data. It is deciding what a node should believe when it has **not** heard anything.
+- Single-writer records and ages instead of timestamps remove most of the hard problems of agreeing without a server.
+- Measuring early changes the design: two of the most important rules came straight from the evaluation.
 
-| Layer | Technology |
-|-------|------------|
-| Runtime | Node 22 (server), Browser ES modules (client) |
-| Transport | WebSocket relay (server) + future WebRTC mesh |
-| State | Custom CRDT-inspired replica (JSON in localStorage) |
-| AI | Vertex AI (Gemini 1.5 Flash), ElevenLabs Flash v2.5 |
-| CV | TensorFlow.js + COCO-SSD (lite_mobilenet_v2) |
-| Deploy | Vultr Cloud Compute + Caddy (auto HTTPS via sslip.io) |
+## What's next
 
-## What's Next
+- **Real sensors and cameras as nodes.** A camera node that counts people on the device (sharing counts, never images) already exists as an experiment; it is not part of this submission. Cameras are blind in smoke, which is exactly why the design handles silent sensors.
+- **Device-to-device radio** (Wi-Fi, Bluetooth or LoRa) instead of the relay server. The sharing rules do not depend on how messages travel.
+- **Several floors**, with stairs in the route graph.
+- **Testing the voice with a fire service** in real breathing apparatus, through their existing radios or bone-conduction headsets.
 
-1. **WebRTC mesh** — Remove relay dependency for true peer-to-peer
-2. **Helmet-mounted UI** — Heads-up display via WebXR (hands-free)
-3. **Incident timeline** — Immutable event log for post-incident review
-4. **Multi-floor support** — Stairwell/elevator graph edges with vertical routing
-5. **Integration** — NFPA 1500/1561 compliance, CAD/RMS export
+## How it fits the tracks
 
----
+- **Neptune North (actors work better together):** many actors, one goal (find everyone), each deciding alone, and still working when communication is cut, jammed or burnt.
+- **Accenture:** the fire roll call is a process everyone accepts as "just how it works". AI reads the building from a photo, writes the brief and talks to the firefighter, while the safety decisions stay with rules and people.
+- **MLH Best Use of ElevenLabs:** voice is the only interface that works inside a burning building; the agent is calm, interruptible and grounded in live data.
+- **MLH Best Use of Gemini API:** four Gemini features on Vertex AI, each checked against the data, none trusted with a safety decision.
 
-**Repository**: https://github.com/EileenYJH/durhack-2026  
-**Live Demo**: https://durhack-2026-production.up.railway.app  
-**Simulation**: `node server.js` → http://localhost:8200  
-**Dashboard**: http://localhost:8200/dashboard.html (Unified 3-panel view)  
-**Live Nodes**: http://localhost:8200/live.html (open on multiple devices with same mesh code)
+## Built with
+
+JavaScript (browser ES modules) · Node.js 22 · Gemini on Google Cloud Vertex AI · ElevenLabs Agents, Text to Speech and Music · Railway · Server-Sent Events relay · SVG

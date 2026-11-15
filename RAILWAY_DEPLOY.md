@@ -2,33 +2,7 @@
 
 Railway provides automatic HTTPS, environment variable management, and deploys directly from your Git repository.
 
-## Method 1: One-Click Deploy (Recommended - 2 minutes)
-
-Click this button to deploy instantly:
-
-[![Deploy on Railway](https://railway.app/button.svg)](https://railway.app/template/xLWXPE?referralCode=alphasec)
-
-This will:
-1. Fork the repo to your GitHub account (or deploy directly)
-2. Create a new Railway project
-3. Deploy the app automatically
-
-After clicking:
-1. Sign in to Railway with GitHub
-2. Click "Deploy Now"
-3. Once deployed, click on your service
-4. Go to **Variables** tab and add your API keys:
-   - `GEMINI_API_KEY`
-   - `GEMINI_MODEL`
-   - `GEMINI_PROVIDER`
-   - `GCP_PROJECT`
-   - `GCP_LOCATION`
-   - `ELEVENLABS_API_KEY`
-   - `ELEVENLABS_VOICE_ID`
-5. Go to **Settings** → **Networking** → **Generate Domain**
-6. Done! Visit your URL
-
-## Method 2: Manual Setup (5 minutes)
+## Setup
 
 ### 1. Push to GitHub
 
@@ -112,9 +86,7 @@ git push
 
 ## Cost
 
-- **Free tier**: 500 hours/month (enough for development/demo)
-- **Hobby plan**: $5/month for unlimited hours
-- No credit card required for the free tier
+Railway's plans and free allowances change; check https://railway.com/pricing before relying on them.
 
 ## Troubleshooting
 
@@ -131,14 +103,6 @@ Make sure all variables are set correctly in the **Variables** tab
 Railway automatically sets the `PORT` environment variable. Our app uses it correctly with:
 ```javascript
 const PORT = Number(process.env.PORT ?? 8200);
-```
-
-## Alternative: Deploy Button
-
-You can also create a one-click deploy button by adding this to your README:
-
-```markdown
-[![Deploy on Railway](https://railway.app/button.svg)](https://railway.app/new/template?template=https://github.com/YOUR_USERNAME/YOUR_REPO)
 ```
 
 ## Support
