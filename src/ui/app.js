@@ -90,7 +90,40 @@ function drawLive() {
   const path = shownRoute
     ? `<polyline class="route" points="${shownRoute.map((p) => `${p.x.toFixed(0)},${p.y.toFixed(0)}`).join(' ')}"/><circle class="route-end" cx="${shownRoute.at(-1).x}" cy="${shownRoute.at(-1).y}" r="9"/>`
     : '';
-  $('live').innerHTML = fire + links + cut + jam + path + people + nodes + focusMarkup();
+  $('live').innerHTML = fire + links + cut + jam + path + detourMarkup() + people + nodes + focusMarkup();
+}
+
+// ---- the way around a cut link ---------------------------------------------------------
+// After a link is severed, show in its own colour the shortest chain of working
+// links that still joins its two ends: the route the news now takes.
+let detour = null; // { a, b, until }
+function detourPath(from, to) {
+  const next = new Map();
+  for (const l of sim.links()) {
+    if (l.severed || l.q <= 0 || !l.a.alive || !l.b.alive) continue;
+    for (const [p, q] of [[l.a, l.b], [l.b, l.a]]) {
+      if (!next.has(p.id)) next.set(p.id, []);
+      next.get(p.id).push(q.id);
+    }
+  }
+  const prev = new Map([[from, null]]);
+  const queue = [from];
+  while (queue.length) {
+    const cur = queue.shift();
+    if (cur === to) break;
+    for (const n of next.get(cur) ?? []) if (!prev.has(n)) (prev.set(n, cur), queue.push(n));
+  }
+  if (!prev.has(to)) return null;
+  const path = [];
+  for (let at = to; at !== null; at = prev.get(at)) path.unshift(at);
+  return path;
+}
+function detourMarkup() {
+  if (!detour || performance.now() > detour.until) return '';
+  const ids = detourPath(detour.a, detour.b);
+  if (!ids) return '';
+  const pts = ids.map((i) => sim.node(i)).map((n) => `${n.x.toFixed(1)},${n.y.toFixed(1)}`).join(' ');
+  return `<polyline class="detour-glow" points="${pts}"/><polyline class="detour" points="${pts}"/>${ids.slice(1, -1).map((i) => `<circle class="detour-hop" cx="${sim.node(i).x.toFixed(1)}" cy="${sim.node(i).y.toFixed(1)}" r="13"/>`).join('')}`;
 }
 
 // ---- what just happened -------------------------------------------------------------
@@ -100,7 +133,12 @@ let focus = null; // { until, tone, at: { x, y, r } | { rect } }
 let eventTimer = 0;
 function notice(title, watch, { tone = 'fire', at = null, seconds = 7 } = {}) {
   const box = $('event');
-  box.className = `event ${tone}`;
+  // Keep the banner off the place it is pointing at: low on the plan when that is high up.
+  const spot = typeof at === 'function' ? at() : at;
+  const sy = spot ? (spot.rect ? spot.rect.y + spot.rect.h / 2 : spot.y) : null;
+  const b = bounds();
+  const low = sy !== null && sy < (b.minY + b.maxY) / 2;
+  box.className = `event ${tone}${low ? ' low' : ''}`;
   $('event-title').textContent = title;
   $('event-watch').innerHTML = watch;
   box.hidden = false;
@@ -319,6 +357,7 @@ $('reset').addEventListener('click', () => {
   seenLog = 0;
   lastReconverge = null;
   focus = null;
+  detour = null;
   $('event').hidden = true;
   drawPanels();
 });
@@ -366,11 +405,18 @@ function pick(e) {
     sim.sever(key);
     const [a, b] = key.split('|').map((k) => sim.node(k));
     const cut = sim.severed.has(key);
-    notice(
-      cut ? `Radio link cut: ${a.label} ↔ ${b.label}` : `Radio link restored: ${a.label} ↔ ${b.label}`,
-      cut ? 'The red dashed line is the lost link. News still gets through <b>around it</b>, passed on by other nodes.' : 'Watch <b>Agreed again after</b> in Live measures.',
-      { tone: cut ? 'fire' : 'go', at: { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2, r: 24 } },
-    );
+    const around = cut ? detourPath(a.id, b.id) : null;
+    const short = (n) => (n.kind === 'responder' || n.kind === 'post' ? n.id : n.label.replace(/ sensor$/, ''));
+    let watch;
+    if (!cut) watch = 'Watch <b>Agreed again after</b> in Live measures.';
+    else if (around) watch = `The red dashed line is the lost link. The <b style="color:#2f8cff">blue route</b> is the way the news now goes around it: ${around.map((i) => short(sim.node(i))).join(' → ')}.`;
+    else watch = 'The red dashed line is the lost link, and no other chain of links joins these two right now: they will catch up when one does.';
+    detour = cut && around ? { a: a.id, b: b.id, until: performance.now() + 12000 } : null;
+    notice(cut ? `Radio link cut: ${a.label} ↔ ${b.label}` : `Radio link restored: ${a.label} ↔ ${b.label}`, watch, {
+      tone: cut ? 'fire' : 'go',
+      at: { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2, r: 24 },
+      seconds: cut ? 12 : 7,
+    });
   } else if (mode === 'ignite') {
     // Whatever was clicked (the floor, the room's name, its count, a person),
     // the room is the one under the pointer. The smallest one wins where they nest.

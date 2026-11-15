@@ -436,3 +436,11 @@ body.ff.mayday .ff-top { background: #3a0b12; }
 .ticker li:first-child { font-weight: 600; }
 .ticker time { font-family: var(--mono, monospace); color: var(--muted); font-size: 12.5px; }
 @media (prefers-reduced-motion: reduce) { .event, #map .focus { animation: none; } }
+
+/* ---- the way the news goes around a cut link ---- */
+#map .detour { fill: none; stroke: #2f8cff; stroke-width: 6; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 14 10; pointer-events: none; animation: detour-flow 0.8s linear infinite; }
+#map .detour-glow { fill: none; stroke: #2f8cff; stroke-opacity: 0.25; stroke-width: 18; stroke-linecap: round; stroke-linejoin: round; pointer-events: none; }
+#map .detour-hop { fill: none; stroke: #2f8cff; stroke-width: 3.5; pointer-events: none; }
+@keyframes detour-flow { to { stroke-dashoffset: -24; } }
+@media (prefers-reduced-motion: reduce) { #map .detour { animation: none; } }
+.event.low { top: auto; bottom: 10px; }
