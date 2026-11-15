@@ -85,8 +85,8 @@ for (const t of TOOLS) {
 }
 
 const agent = await post('/agents/create', {
-  name: 'Roll Call firefighter radio',
-  tags: ['durhack-2026', 'roll-call'],
+  name: 'ARIA firefighter radio',
+  tags: ['durhack-2026', 'aria'],
   // Only callers holding a token from our server can talk to it.
   platform_settings: { auth: { enable_auth: true } },
   conversation_config: {

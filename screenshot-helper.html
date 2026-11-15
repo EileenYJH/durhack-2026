@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ARIA — Screenshot Helper (open at hosted URL, not localhost)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="src/ui/style.css">
+<style>
+  :root { --gap: 16px; --card-radius: 12px; }
+  body { padding: var(--gap); background: var(--bg); color: var(--fg); font-family: 'Barlow', sans-serif; }
+  h1 { font-family: 'Barlow Condensed', sans-serif; font-size: 28px; margin-bottom: 4px; }
+  .subtitle { color: var(--muted); margin-bottom: 24px; }
+  .grid { display: grid; grid-template-columns: 1fr; gap: var(--gap); }
+  @media (min-width: 1000px) { .grid { grid-template-columns: 1fr 1fr; } }
+  @media (min-width: 1400px) { .grid { grid-template-columns: 1fr 1fr 1fr; } }
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: var(--card-radius); overflow: hidden; display: flex; flex-direction: column; }
+  .card-header { padding: 12px 16px; background: var(--card-hover); border-bottom: 1px solid var(--border); font-weight: 600; display: flex; align-items: center; gap: 8px; }
+  .card-body { flex: 1; min-height: 400px; padding: 0; }
+  .card-body iframe { width: 100%; height: 500px; border: none; background: var(--bg); }
+  .badge { font-size: 11px; padding: 2px 8px; border-radius: 999px; background: var(--bg); border: 1px solid var(--border); }
+  .badge.primary { border-color: var(--accent); color: var(--accent); }
+  .badge.warning { border-color: var(--warn); color: var(--warn); }
+  .note { padding: 12px; font-size: 13px; color: var(--muted); border-top: 1px solid var(--border); }
+  .urls { font-family: 'IBM Plex Mono', monospace; font-size: 12px; line-height: 1.8; }
+  .urls a { color: var(--accent); }
+</style>
+</head>
+<body>
+<header>
+  <h1>ARIA — Devpost Screenshot Helper</h1>
+  <p class="subtitle">Open this page at <strong>https://durhack-2026-production.up.railway.app/screenshot-helper.html</strong> (HTTPS required for camera/mic). Capture each card below.</p>
+</header>
+
+<div class="grid">
+  <!-- 1. Unified Dashboard -->
+  <section class="card">
+    <div class="card-header">
+      1. Unified Dashboard <span class="badge primary">hero image</span>
+    </div>
+    <div class="card-body">
+      <iframe src="dashboard.html" title="Unified Dashboard"></iframe>
+    </div>
+    <div class="note">Three panels: Command Board (live), Firefighter Nodes (add door/room cameras), Mesh Network (peers, sync log, quick actions). Best wide (1400px+).</div>
+  </section>
+
+  <!-- 2. Command Board (Firefighter Phone) -->
+  <section class="card">
+    <div class="card-header">
+      2. Firefighter Phone — Command Board <span class="badge primary">hero image</span>
+    </div>
+    <div class="card-body">
+      <iframe src="live.html?role=board&id=demo-cmd&mesh=demo" title="Command Board"></iframe>
+    </div>
+    <div class="note">Shows search order, route overlay, air, belief, radio log. Tap "Voice report" or "Talk to Command" for action shots.</div>
+  </section>
+
+  <!-- 3. Simulation with Break-it Toolbar -->
+  <section class="card">
+    <div class="card-header">
+      3. Simulation — Break It Toolbar <span class="badge warning">action shot</span>
+    </div>
+    <div class="card-body">
+      <iframe src="index.html" title="Simulation"></iframe>
+    </div>
+    <div class="note">Top toolbar: Cut Link, Start Fire, Kill Sensor, Firefighter Down, Jam Radio, Speed Fire. Floor plan shows fire/smoke spread, sensor burnout, agent paths.</div>
+  </section>
+
+  <!-- 4. Building Editor with Photo Import -->
+  <section class="card">
+    <div class="card-header">
+      4. Building Editor — Photo Import <span class="badge warning">action shot</span>
+    </div>
+    <div class="card-body">
+      <iframe src="editor.html" title="Building Editor"></iframe>
+    </div>
+    <div class="note">Click "Photo of a floor plan" → upload an evacuation plan → Gemini extracts rooms/doors → repair step shows diff → "Use this building".</div>
+  </section>
+
+  <!-- 5. Door Camera Node -->
+  <section class="card">
+    <div class="card-header">
+      5. Live Node — Door Camera <span class="badge">mesh node</span>
+    </div>
+    <div class="card-body">
+      <iframe src="live.html?role=door&id=demo-door-1&mesh=demo" title="Door Camera"></iframe>
+    </div>
+    <div class="note">Point at a doorway. Counts people crossing (A→B / B→A). Needs HTTPS + camera permission.</div>
+  </section>
+
+  <!-- 6. Room Camera Node -->
+  <section class="card">
+    <div class="card-header">
+      6. Live Node — Room Camera <span class="badge">mesh node</span>
+    </div>
+    <div class="card-body">
+      <iframe src="live.html?role=room&id=demo-room-1&mesh=demo" title="Room Camera"></iframe>
+    </div>
+    <div class="note">Point at a room. Reports presence + moving/still. TensorFlow.js COCO-SSD on device.</div>
+  </section>
+</div>
+
+<hr style="margin: 32px 0; border-color: var(--border);">
+
+<section style="max-width: 900px;">
+  <h2>Direct URLs for standalone captures</h2>
+  <p class="note">Open each at your Railway domain (https://durhack-2026-production.up.railway.app/...). Replace <code>demo</code> with your mesh code.</p>
+  <div class="urls">
+    <p><strong>Dashboard:</strong> <a href="dashboard.html" target="_blank">/dashboard.html</a></p>
+    <p><strong>Command Board:</strong> <a href="live.html?role=board&id=cmd&mesh=demo" target="_blank">/live.html?role=board&id=cmd&mesh=demo</a></p>
+    <p><strong>Firefighter Phone (FF1):</strong> <a href="live.html?role=board&id=ff1&mesh=demo" target="_blank">/live.html?role=board&id=ff1&mesh=demo</a></p>
+    <p><strong>Door Camera:</strong> <a href="live.html?role=door&id=door-1&mesh=demo" target="_blank">/live.html?role=door&id=door-1&mesh=demo</a></p>
+    <p><strong>Room Camera:</strong> <a href="live.html?role=room&id=room-1&mesh=demo" target="_blank">/live.html?role=room&id=room-1&mesh=demo</a></p>
+    <p><strong>Simulation:</strong> <a href="index.html" target="_blank">/index.html</a></p>
+    <p><strong>Editor:</strong> <a href="editor.html" target="_blank">/editor.html</a></p>
+    <p><strong>Status API:</strong> <a href="api/status" target="_blank">/api/status</a> (shows Gemini provider, ElevenLabs, peer count)</p>
+  </div>
+</section>
+
+<section style="max-width: 900px; margin-top: 24px;">
+  <h2>Suggested 6 screenshots for Devpost</h2>
+  <ol style="line-height: 2;">
+    <li><strong>Dashboard wide</strong> — 3 panels visible, peers connected, sync log active</li>
+    <li><strong>Command Board</strong> — search order list, route overlay on floor plan, radio log with AI brief</li>
+    <li><strong>Voice Report in action</strong> — hold "Voice report" button, transcript showing, parsed claim appearing</li>
+    <li><strong>Simulation + Break It</strong> — fire spreading, toolbar mid-action (e.g., "Cut Link" pressed)</li>
+    <li><strong>Editor photo import</strong> — photo underneath, Gemini-detected rooms (colored boxes), repair diff listed</li>
+    <li><strong>Mesh status</strong> — /api/status JSON showing provider, voice, peer count</li>
+  </ol>
+</section>
+</body>
+</html>

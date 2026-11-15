@@ -1,15 +1,15 @@
 #!/usr/bin/env bash
 # Run once on a fresh Ubuntu 22.04 or 24.04 Vultr server, as root:
 #   bash setup.sh
-# Installs Node 22 and Caddy, runs Roll Call as a service on localhost, and
+# Installs Node 22 and Caddy, runs ARIA as a service on localhost, and
 # puts Caddy in front with an automatic HTTPS certificate. No domain needed:
 # it uses <ip>.sslip.io, which resolves to the server's own address.
 
 set -euo pipefail
 
-APP=/opt/rollcall
+APP=/opt/aria
 IP=$(curl -fsS https://api.ipify.org)
-HOSTNAME="${ROLLCALL_HOST:-${IP//./-}.sslip.io}"
+HOSTNAME="${ARIA_HOST:-${IP//./-}.sslip.io}"
 
 export DEBIAN_FRONTEND=noninteractive
 apt-get update -qq
@@ -30,18 +30,18 @@ if ! command -v caddy >/dev/null; then
 fi
 
 # App (files were copied to $APP by deploy.sh)
-id rollcall >/dev/null 2>&1 || useradd --system --home "$APP" --shell /usr/sbin/nologin rollcall
-chown -R rollcall:rollcall "$APP"
+id aria >/dev/null 2>&1 || useradd --system --home "$APP" --shell /usr/sbin/nologin aria
+chown -R aria:aria "$APP"
 [ -f "$APP/.env" ] && chmod 600 "$APP/.env"
 for f in "$APP"/service-account*.json "$APP"/*-key.json; do [ -f "$f" ] && chmod 600 "$f"; done || true
 
-cat > /etc/systemd/system/rollcall.service <<UNIT
+cat > /etc/systemd/system/aria.service <<UNIT
 [Unit]
-Description=Roll Call
+Description=ARIA
 After=network.target
 
 [Service]
-User=rollcall
+User=aria
 WorkingDirectory=$APP
 Environment=HOST=127.0.0.1
 Environment=PORT=8200
@@ -65,8 +65,8 @@ $HOSTNAME {
 CADDY
 
 systemctl daemon-reload
-systemctl enable --now rollcall
-systemctl restart rollcall
+systemctl enable --now aria
+systemctl restart aria
 systemctl reload caddy || systemctl restart caddy
 
 ufw allow OpenSSH >/dev/null
@@ -74,5 +74,5 @@ ufw allow 80,443/tcp >/dev/null
 ufw --force enable >/dev/null
 
 echo
-echo "Roll Call is up at https://$HOSTNAME"
+echo "ARIA is up at https://$HOSTNAME"
 echo "(the first request can take a few seconds while the certificate is issued)"

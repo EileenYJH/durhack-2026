@@ -1,0 +1,292 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ARIA — Unified Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="src/ui/style.css">
+<style>
+:root { --gap: 16px; --panel-radius: 8px; }
+body.dashboard { display: grid; grid-template-columns: 1fr; gap: var(--gap); padding: var(--gap); min-height: 100vh; background: var(--bg); }
+@media (min-width: 1400px) { body.dashboard { grid-template-columns: 1.2fr 1fr 1fr; } }
+@media (min-width: 1000px) and (max-width: 1399px) { body.dashboard { grid-template-columns: 1fr 1fr; } }
+
+.panel { background: var(--card); border-radius: var(--panel-radius); border: 1px solid var(--border); display: flex; flex-direction: column; overflow: hidden; min-height: 0; }
+.panel-header { padding: 12px 16px; border-bottom: 1px solid var(--border); background: var(--card-hover); font-weight: 600; display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+.panel-body { flex: 1; overflow: auto; padding: 12px; min-height: 0; }
+.panel iframe { width: 100%; height: 100%; border: none; background: var(--bg); }
+.panel .embed { width: 100%; height: 100%; border: none; background: var(--bg); }
+
+.split { display: grid; gap: 8px; }
+.split-2 { grid-template-columns: 1fr 1fr; }
+.split-3 { grid-template-columns: 1fr 1fr 1fr; }
+@media (max-width: 900px) { .split-2, .split-3 { grid-template-columns: 1fr; } }
+
+.mesh-status { font-family: 'IBM Plex Mono', monospace; font-size: 12px; line-height: 1.6; }
+.mesh-status .peer { padding: 4px 8px; margin: 2px 0; border-radius: 4px; background: var(--bg); }
+.mesh-status .peer.live { border-left: 3px solid var(--ok); }
+.mesh-status .peer.silent { border-left: 3px solid var(--warn); }
+.mesh-status .peer.dead { border-left: 3px solid var(--fire); opacity: 0.6; }
+
+.badge { font-size: 11px; padding: 2px 6px; border-radius: 999px; background: var(--bg); border: 1px solid var(--border); }
+.badge.live { border-color: var(--ok); color: var(--ok); }
+.badge.warning { border-color: var(--warn); color: var(--warn); }
+.badge.danger { border-color: var(--fire); color: var(--fire); }
+
+h3 { margin: 12px 0 6px; font-size: 14px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; }
+h3:first-child { margin-top: 0; }
+
+#sync-log { font-family: 'IBM Plex Mono', monospace; font-size: 11px; max-height: 200px; overflow: auto; background: var(--bg); padding: 8px; border-radius: 4px; border: 1px solid var(--border); }
+#sync-log .entry { padding: 2px 0; border-bottom: 1px solid var(--border); }
+#sync-log .entry:last-child { border-bottom: none; }
+#sync-log .time { color: var(--muted); }
+#sync-log .type.brief { color: var(--accent); }
+#sync-log .type.direction { color: var(--ok); }
+#sync-log .type.voice { color: var(--warn); }
+#sync-log .type.claim { color: var(--info); }
+#sync-log .type.sync { color: var(--muted); }
+
+.empty-state { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; min-height: 300px; color: var(--muted); text-align: center; gap: 12px; }
+.empty-state button { margin-top: 8px; }
+
+@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+.syncing { animation: pulse 1s ease-in-out infinite; }
+</style>
+</head>
+<body class="dashboard">
+<header class="bar" style="position: sticky; top: 0; z-index: 100; grid-column: 1 / -1;">
+  <div class="brand"><span class="mark" aria-hidden="true"></span><h1>ARIA — Unified Dashboard</h1></div>
+  <div class="stat"><span class="k">Mesh</span><span class="v" id="mesh-code">demo</span></div>
+  <div class="stat"><span class="k">Nodes</span><span class="v" id="peer-count">0</span></div>
+  <div class="stat"><span class="k">Inside</span><span class="v" id="total-inside">0</span></div>
+  <div class="controls">
+    <input id="mesh-input" type="text" value="demo" style="width: 100px; padding: 4px 8px; border-radius: 4px; border: 1px solid var(--border); background: var(--bg); color: var(--fg);" placeholder="Mesh code">
+    <button id="apply-mesh" class="primary">Apply</button>
+    <a class="navlink" href="index.html">Simulation</a>
+    <a class="navlink" href="editor.html">Editor</a>
+    <a class="navlink" href="live.html">Single Node</a>
+  </div>
+</header>
+
+<main>
+  <!-- COMMAND BOARD PANEL -->
+  <section class="panel" style="grid-row: 1 / -1;">
+    <div class="panel-header">🎛️ Command Board <span id="cmd-status" class="badge">disconnected</span></div>
+    <div class="panel-body" style="min-height: 600px;">
+      <iframe id="cmd-frame" src="live.html?role=board&mesh=demo" title="Command Board"></iframe>
+    </div>
+  </section>
+
+  <!-- FIREFIGHTER PANELS -->
+  <section class="panel">
+    <div class="panel-header">👨‍🚒 Firefighter Nodes <span id="ff-count" class="badge">0</span></div>
+    <div class="panel-body">
+      <div class="split split-3" id="ff-grid">
+        <div class="empty-state" style="grid-column: 1 / -1;">
+          <p>Connect firefighter nodes to see them here</p>
+          <button class="primary" onclick="addFirefighter('door')">Add Door Camera</button>
+          <button class="secondary" onclick="addFirefighter('room')" style="margin-left: 8px;">Add Room Camera</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- NETWORK / MESH VIEW -->
+  <section class="panel">
+    <div class="panel-header">📡 Mesh Network <span id="mesh-status" class="badge">disconnected</span></div>
+    <div class="panel-body">
+      <h3>Peers</h3>
+      <div class="mesh-status" id="peer-list">No peers connected</div>
+
+      <h3>Sync Log</h3>
+      <div id="sync-log">Waiting for mesh activity...</div>
+
+      <h3>Quick Actions</h3>
+      <div style="display: flex; flex-direction: column; gap: 8px;">
+        <button class="secondary" onclick="broadcastTest()">📢 Broadcast Test Brief</button>
+        <button class="secondary" onclick="simulateFire()">🔥 Simulate Fire in Random Room</button>
+        <button class="secondary" onclick="cutLink()">✂️ Cut Network Link</button>
+        <button class="secondary" onclick="restoreLink()">🔗 Restore Link</button>
+      </div>
+    </div>
+  </section>
+</main>
+
+<script type="module">
+import { joinMesh } from './src/live/mesh.js';
+import { ROOMS, ROOM_IDS, initBuilding } from './src/core/building.js';
+import { createReplica, writeReport, writeDoor } from './src/core/replica.js';
+import { buildingBelief, headcount } from './src/core/belief.js';
+import { now } from './src/live/live.js';
+
+initBuilding();
+
+const meshInput = document.getElementById('mesh-input');
+const applyBtn = document.getElementById('apply-mesh');
+const cmdFrame = document.getElementById('cmd-frame');
+const ffGrid = document.getElementById('ff-grid');
+const ffCount = document.getElementById('ff-count');
+const peerCount = document.getElementById('peer-count');
+const totalInside = document.getElementById('total-inside');
+const peerList = document.getElementById('peer-list');
+const syncLog = document.getElementById('sync-log');
+const cmdStatus = document.getElementById('cmd-status');
+const meshStatus = document.getElementById('mesh-status');
+
+let meshCode = 'demo';
+let dashboardNode = null;
+let firefighterFrames = [];
+let syncLogEntries = [];
+
+function logSync(type, message, details = '') {
+  const entry = document.createElement('div');
+  entry.className = 'entry';
+  entry.innerHTML = `<span class="time">${new Date().toLocaleTimeString()}</span> <span class="type ${type}">[${type.toUpperCase()}]</span> ${message} ${details ? `<span style="color:var(--muted)">${details}</span>` : ''}`;
+  syncLog.prepend(entry);
+  if (syncLog.children.length > 50) syncLog.lastChild.remove();
+}
+
+function updatePeerList() {
+  if (!dashboardNode?.net?.peers) {
+    peerList.innerHTML = '<span class="muted">Dashboard not connected to mesh</span>';
+    return;
+  }
+  const t = now();
+  const peers = Object.entries(dashboardNode.net.peers).sort((a, b) => b[1] - a[1]);
+  peerCount.textContent = peers.length;
+  meshStatus.textContent = peers.length ? 'connected' : 'disconnected';
+  meshStatus.className = peers.length ? 'badge live' : 'badge danger';
+
+  if (!peers.length) {
+    peerList.innerHTML = '<span class="muted">No peers heard yet</span>';
+    return;
+  }
+  peerList.innerHTML = peers.map(([id, at]) => {
+    const age = t - at;
+    const cls = age < 5 ? 'live' : age < 30 ? 'silent' : 'dead';
+    return `<div class="peer ${cls}"><strong>${id}</strong> <span class="muted">${age < 5 ? 'live' : `silent ${Math.round(age)}s`}</span></div>`;
+  }).join('');
+}
+
+function updateTotals() {
+  if (!dashboardNode?.rep) return;
+  const belief = buildingBelief(dashboardNode.rep, now());
+  const hc = headcount(belief);
+  totalInside.textContent = hc.low === hc.high ? hc.low : `${hc.low}–${hc.high}`;
+}
+
+function addFirefighter(role) {
+  const id = `${role}-${Date.now().toString(36).slice(-4)}`;
+  const frame = document.createElement('iframe');
+  frame.className = 'embed';
+  frame.style.height = '400px';
+  frame.src = `live.html?role=${role}&id=${id}&mesh=${meshCode}`;
+  frame.title = `${role} camera: ${id}`;
+
+  const wrapper = document.createElement('div');
+  wrapper.style.display = 'flex';
+  wrapper.style.flexDirection = 'column';
+  wrapper.style.gap = '8px';
+  wrapper.innerHTML = `<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 8px;background:var(--bg);border-radius:4px;border:1px solid var(--border);">
+    <span style="font-weight:600;text-transform:capitalize;">${role} camera</span>
+    <span class="badge" data-role="${role}">${role}</span>
+  </div>`;
+  wrapper.appendChild(frame);
+
+  ffGrid.appendChild(wrapper);
+  firefighterFrames.push({ id, role, frame, wrapper });
+  ffCount.textContent = firefighterFrames.length;
+
+  // Remove empty state
+  const empty = ffGrid.querySelector('.empty-state');
+  if (empty) empty.remove();
+
+  logSync('sync', `Added ${role} camera`, id);
+}
+
+function removeFirefighter(id) {
+  const idx = firefighterFrames.findIndex(f => f.id === id);
+  if (idx >= 0) {
+    firefighterFrames[idx].wrapper.remove();
+    firefighterFrames.splice(idx, 1);
+    ffCount.textContent = firefighterFrames.length;
+    logSync('sync', `Removed firefighter`, id);
+  }
+}
+
+function broadcastTest() {
+  if (!dashboardNode) return;
+  writeReport(dashboardNode.rep, 'A', dashboardNode.id, { state: 'occupied', count: 2, conf: 0.9, kind: 'test' }, now());
+  logSync('brief', 'Broadcast test brief', 'Room A: 2 occupied');
+}
+
+function simulateFire() {
+  if (!dashboardNode) return;
+  const rooms = ROOM_IDS.filter(id => !ROOMS[id].hall);
+  const fireRoom = rooms[Math.floor(Math.random() * rooms.length)];
+  // Note: fire simulation would need access to sim internals
+  logSync('danger', `Fire simulated in ${ROOMS[fireRoom].name}`, fireRoom);
+}
+
+function cutLink() {
+  logSync('warning', 'Network link cut (simulated)');
+  // Would need access to sim to actually cut
+}
+
+function restoreLink() {
+  logSync('sync', 'Network link restored (simulated)');
+}
+
+async function connectDashboard() {
+  const rep = createReplica('dashboard');
+  const net = joinMesh({ mesh: meshCode, id: 'dashboard', rep, now });
+  dashboardNode = { rep, net, id: 'dashboard' };
+
+  cmdStatus.textContent = 'connected';
+  cmdStatus.className = 'badge live';
+  meshStatus.textContent = 'connected';
+  meshStatus.className = 'badge live';
+
+  // Listen for mesh messages
+  const originalOnMessage = net.onMessage?.bind(net);
+  net.onMessage = (msg, from) => {
+    logSync('sync', `Received from ${from}`, msg.type || 'update');
+    if (originalOnMessage) originalOnMessage(msg, from);
+    updatePeerList();
+    updateTotals();
+  };
+
+  // Periodic updates
+  setInterval(() => {
+    updatePeerList();
+    updateTotals();
+  }, 1000);
+
+  logSync('sync', 'Dashboard connected to mesh', meshCode);
+}
+
+applyBtn.addEventListener('click', () => {
+  meshCode = meshInput.value.trim() || 'demo';
+  document.getElementById('mesh-code').textContent = meshCode;
+  location.reload();
+});
+
+meshInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') applyBtn.click();
+});
+
+// Initialize
+connectDashboard();
+
+// Also connect command board frame when it loads
+cmdFrame.addEventListener('load', () => {
+  try {
+    cmdFrame.contentWindow.postMessage({ type: 'dashboard-connect', mesh: meshCode }, '*');
+  } catch {}
+});
+</script>
+</body>
+</html>

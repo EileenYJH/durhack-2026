@@ -239,3 +239,86 @@ $('speak').addEventListener('click', async (e) => {
   heldUntil = performance.now() + Math.max(4000, secs * 1000);
   btn.disabled = false;
 });
+
+// ---- voice report ---------------------------------------------------------------
+let recognition = null;
+function initVoiceRecognition() {
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) {
+    $('voice-status').textContent = 'Speech recognition not supported in this browser';
+    $('voice-report').disabled = true;
+    return;
+  }
+  recognition = new SR();
+  recognition.continuous = false;
+  recognition.interimResults = false;
+  recognition.lang = 'en-US';
+  recognition.maxAlternatives = 1;
+}
+
+async function parseVoiceReport(transcript) {
+  // Send to server for Gemini parsing
+  const r = await fetch('/api/voice-parse', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ transcript })
+  });
+  if (!r.ok) throw new Error('Parse failed');
+  return r.json();
+}
+
+function applyVoiceClaim(parsed) {
+  const { room, state, count, details } = parsed;
+  if (!room || !ROOM_IDS.includes(room)) return false;
+  const validStates = ['empty', 'occupied', 'still', 'possible'];
+  if (!validStates.includes(state)) return false;
+  writeReport(me.rep, room, me.id, {
+    state,
+    count: Number(count) || 0,
+    conf: 0.9,
+    kind: 'voice',
+    details: details || transcript
+  }, now());
+  return true;
+}
+
+$('voice-report').addEventListener('click', async (e) => {
+  const btn = e.currentTarget;
+  const status = $('voice-status');
+  if (!recognition) initVoiceRecognition();
+  if (!recognition) return;
+
+  btn.disabled = true;
+  btn.textContent = '🎤 Listening...';
+  status.textContent = 'Speak now...';
+
+  recognition.onresult = async (event) => {
+    const transcript = event.results[0][0].transcript.trim();
+    status.textContent = `Heard: "${transcript}" — parsing...`;
+    try {
+      const parsed = await parseVoiceReport(transcript);
+      if (applyVoiceClaim(parsed)) {
+        status.textContent = `✅ Logged: ${parsed.room} = ${parsed.state} (${parsed.count})`;
+        render(); // refresh UI immediately
+      } else {
+        status.textContent = `❌ Could not parse: ${JSON.stringify(parsed)}`;
+      }
+    } catch (err) {
+      status.textContent = `❌ Error: ${err.message}`;
+    }
+    btn.disabled = false;
+    btn.textContent = '🎤 Voice Report';
+  };
+  recognition.onerror = (err) => {
+    status.textContent = `❌ Recognition error: ${err.error}`;
+    btn.disabled = false;
+    btn.textContent = '🎤 Voice Report';
+  };
+  recognition.onend = () => {
+    if (btn.disabled) { // still disabled means error or no result
+      btn.disabled = false;
+      btn.textContent = '🎤 Voice Report';
+    }
+  };
+  recognition.start();
+});

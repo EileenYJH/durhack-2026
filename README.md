@@ -2,7 +2,9 @@
 
 Our entry for [DurHack 2026](https://durhack-26.devpost.com/), Durham, 14-15 November 2026 (24 hours).
 
-> **Roll Call**: a fire-incident occupancy board that tells responders which rooms are confirmed empty, possibly occupied, occupied (still) or unknown, kept by independent nodes that each decide alone and merge when they can reach each other. Software only. Solo entry. Design: [docs/superpowers/specs/2026-11-14-roll-call-design.md](docs/superpowers/specs/2026-11-14-roll-call-design.md)
+> **ARIA**: a fire-incident occupancy board that tells responders which rooms are confirmed empty, possibly occupied, occupied (still) or unknown, kept by independent nodes that each decide alone and merge when they can reach each other. Software only. Solo entry. Design: [docs/superpowers/specs/2026-11-14-roll-call-design.md](docs/superpowers/specs/2026-11-14-roll-call-design.md)
+
+**Live demo**: https://durhack-2026-production.up.railway.app
 
 Targets: Neptune North (primary), Accenture, the overall prizes, MLH ElevenLabs and Gemini.
 
@@ -30,21 +32,23 @@ node server.js
 ```
 
 - http://localhost:8200/editor.html is the building editor: draw rooms, add doors and exits, or import a photo of a floor plan (needs `GEMINI_API_KEY`). "Use this building" makes every page work on your layout.
+- http://localhost:8200/dashboard.html is the **Unified Dashboard**: three-panel view (Command Board, Firefighter Nodes, Mesh Network) with live mesh synchronization, peer status, sync log, and quick actions.
 - The simulation has a **Break it** toolbar: sever any radio link, collapse a doorway, kill a sensor, start a second fire, put a firefighter down, jam the radio or speed the fire up. Fire and smoke spread through doorways, sensors burn out, smoke blinds cameras and weakens radio, and firefighters run on limited air and pull out before their way out is lost.
 - **Firefighter phones:** on the simulation, press **Firefighter phones** and scan the code with another device (both must use the hosted address, not localhost). The phone becomes one firefighter: current order, turn-by-turn route, air, what that firefighter believes about the building, and radio traffic, updated every second and spoken aloud if voice is on. The firefighter can answer: room clear, casualty here, way out, mayday. Keep the main screen in front: browsers slow down background tabs.
+- **Voice reports (hold to talk):** on the firefighter phone, hold **Voice report** to speak a room update (e.g., "Lab 1 is clear", "Found two adults in Workshop", "Corridor blocked by debris"). Speech is transcribed, parsed by Gemini into a structured claim, and written to the local replica — then synced across the mesh.
 - **Talk to Command (live voice):** on the firefighter phone, press **Talk to Command** for a two-way voice call with an ElevenLabs voice agent (newest `eleven_v4_turbo` voice, `turn_v3` turn-taking). Ask for directions or the situation, report a room clear or a casualty, or say mayday; interrupt it at any time and it stops and answers you. It only knows what this phone's live picture tells it, through four tools, and urgent radio traffic is pushed into the call as it happens. Set up once with `node scripts/setup-voice-agent.js`, then set `ELEVENLABS_AGENT_ID`. Needs HTTPS for the microphone, so use the hosted site.
 - **Photo import:** Gemini reads room boxes from the photo; a repair step then closes gaps, puts doors on shared walls, adds missing exits and corridors, and lists every change so it can be checked against the photo, which is shown underneath.
 - http://localhost:8200 is the simulation: 19 nodes, each with its own copy of the state, on a network you can cut.
 - http://localhost:8200/live.html turns the device into a real node. Open it on several devices or windows with the same mesh code. Roles: command board, door camera (counts people crossing a doorway), room camera (reports presence and whether people are moving).
 - Tests: `node --test`. Safety measurement: `node scripts/evaluate.js 200`. Results are in [docs/evaluation.md](docs/evaluation.md).
 
-Optional keys go in `.env` (copy `.env.example`): `GEMINI_API_KEY` (or the Vertex AI settings below) for the written brief, and `ELEVENLABS_API_KEY` for the voice. Without them the brief is rule-based and the browser's own voice reads it.
+Optional keys go in `.env` (copy `.env.example`): `GEMINI_API_KEY` (or the Vertex AI settings below) for the written brief, layout import, directions rewrite, and voice parsing; `ELEVENLABS_API_KEY` for the voice. Without them the brief is rule-based and the browser's own voice reads it.
 
 Phones need HTTPS to use their camera, so a phone camera node needs the server behind an HTTPS address (a tunnel or a hosted copy). A laptop on localhost works as it is.
 
 ## Gemini through Vertex AI
 
-Roll Call can call Gemini three ways, set with `GEMINI_PROVIDER`. All give the same brief, floor plan import and rewritten directions.
+ARIA can call Gemini three ways, set with `GEMINI_PROVIDER`. All give the same brief, floor plan import, rewritten directions, and voice parsing.
 
 | `GEMINI_PROVIDER` | What you need | Billed to |
 |---|---|---|
@@ -72,12 +76,12 @@ gcloud auth application-default login
    On a server, create a service account instead and keep its key file private:
 
 ```bash
-gcloud iam service-accounts create rollcall
-gcloud projects add-iam-policy-binding YOUR_PROJECT_ID --member="serviceAccount:rollcall@YOUR_PROJECT_ID.iam.gserviceaccount.com" --role="roles/aiplatform.user"
-gcloud iam service-accounts keys create service-account-key.json --iam-account=rollcall@YOUR_PROJECT_ID.iam.gserviceaccount.com
+gcloud iam service-accounts create aria
+gcloud projects add-iam-policy-binding YOUR_PROJECT_ID --member="serviceAccount:aria@YOUR_PROJECT_ID.iam.gserviceaccount.com" --role="roles/aiplatform.user"
+gcloud iam service-accounts keys create service-account-key.json --iam-account=aria@YOUR_PROJECT_ID.iam.gserviceaccount.com
 ```
 
-3. In `.env` set `GEMINI_PROVIDER=vertex`, `GEMINI_MODEL=gemini-3.5-flash`, `GCP_PROJECT=YOUR_PROJECT_ID`, `GCP_LOCATION=global`, and for a server `GOOGLE_APPLICATION_CREDENTIALS=/opt/rollcall/service-account-key.json`.
+3. In `.env` set `GEMINI_PROVIDER=vertex`, `GEMINI_MODEL=gemini-3.5-flash`, `GCP_PROJECT=YOUR_PROJECT_ID`, `GCP_LOCATION=global`, and for a server `GOOGLE_APPLICATION_CREDENTIALS=/opt/aria/service-account-key.json`.
 4. Check it: `node scripts/check-gemini.js`.
 
 Key files are git-ignored. Copy one to a server by itself with `scp`, never inside the project folder you deploy.
@@ -107,7 +111,7 @@ A hosted copy gives phones the HTTPS address they need for their cameras, and le
 bash deploy/deploy.sh <server-ip> .env
 ```
 
-It installs Node 22 and Caddy, runs Roll Call as a service on localhost, and puts Caddy in front with an automatic HTTPS certificate at `https://<ip-with-dashes>.sslip.io`. No domain is needed. Re-run the same command to update.
+It installs Node 22 and Caddy, runs ARIA as a service on localhost, and puts Caddy in front with an automatic HTTPS certificate at `https://<ip-with-dashes>.sslip.io`. No domain is needed. Re-run the same command to update.
 
 The server keeps no data: the mesh relay only forwards messages. The Gemini and ElevenLabs proxies are limited to 30 requests a minute per address so a public copy cannot drain the keys.
 
@@ -118,7 +122,7 @@ The server keeps no data: the mesh relay only forwards messages. The Gemini and 
 - `src/editor/` the layout editor
 - `src/sim/` simulated people, sensors and network
 - `src/live/` real device nodes: mesh transport, camera tracker
-- `src/ui/` the command board and the brief
+- `src/ui/` the command board, brief, and AI helpers (directions, voice)
 - `server.js` static files, mesh relay, Gemini and ElevenLabs proxies
 - `scripts/evaluate.js` randomised safety measurement
 
@@ -126,3 +130,4 @@ The server keeps no data: the mesh relay only forwards messages. The Gemini and 
 
 - Slides: https://docs.google.com/presentation/d/1q3omTEBLCsSmGaBdDifoDqNkFxeMxge6hBS9LN3U38o
 - Devpost: https://durhack-26.devpost.com/
+- Live demo: https://durhack-2026-production.up.railway.app
