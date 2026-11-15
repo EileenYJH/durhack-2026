@@ -371,7 +371,7 @@ A: Each piece of information has one owner, which is the only device that can wr
 A: We do not need them. Each record carries how old it is, not a timestamp, and the age grows as the record is passed on.
 
 **Q: How do firefighters avoid searching the same room?**
-A: Each firefighter runs the same rules on its own copy, so they reach the same assignment. Each also publishes a claim ("I'm going to Lab 2"), which the others respect. It is not perfect: while the radio is cut, 27.8% of searches repeat a room someone searched in the last 45 seconds, because two firefighters cannot hear each other's reports. Our measurements found that, and it is on our list.
+A: Each firefighter works out the **whole team's** assignment, not just its own: every room gets an urgency score from its own copy, then R1, R2 and R3 take turns in that fixed order, each taking the room with the best urgency minus distance that nobody before it has taken. Teammates' positions come from the status each one broadcasts every second. Same rules on the same data give the same table on every device, and each firefighter follows its own row. A room someone has just searched drops to zero urgency, and a firefighter keeps its current room unless something more urgent comes up. It is not perfect: when a cut or a jam makes the copies differ, two firefighters can pick the same room. 27.8% of searches repeat a room searched in the last 45 seconds, mostly during cuts and jams. The error is the safe one: a room searched twice, never a room nobody searches.
 
 **Q: How fast do they agree again after a link comes back?**
 A: In the fire runs, a mean of 10.5 seconds, worst case 52.7 seconds. In runs without fire, a mean of 5.4 seconds.
