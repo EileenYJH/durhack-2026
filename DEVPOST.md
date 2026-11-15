@@ -49,6 +49,21 @@ Plain JavaScript modules in the browser, and one small Node server with no depen
 
 **Why voice:** inside a fire a firefighter cannot look at a screen. Their hands hold a hose, tools or a casualty; their gloves are thick; their mask fogs; smoke can mean zero visibility. Radio is already how they work. A calm, human voice is easier to follow under stress than robotic speech, and the firefighter must be able to cut in ("mayday!") at any moment.
 
+### How I chose the voices, and the feeling in them
+
+On a fireground, **how** something is said matters as much as what is said. A frightened firefighter needs to hear steadiness, and a commander needs to tell at once who is speaking. So each voice was chosen for a job.
+
+| Who | ElevenLabs voice | Why this voice | The feeling it carries |
+|---|---|---|---|
+| **Command** (the live agent, the commander's brief, the radio) | **Alexis Lancaster**: warm, gentle, middle-aged British female | The opposite of the fireground: calm where the firefighter is breathless, unhurried where everything else is urgent. A female voice stands out clearly from a crew of mostly male radio voices, so "this is Command" is recognised from the first word. British, like the crews it would serve. | **Calm and steady.** The agent is told to speak like an experienced fire officer: short sentences, one instruction at a time, never more than three sentences unless reading directions. A steady voice tells a frightened person "someone has this under control", which helps them follow the instruction. |
+| **Firefighter R1** (the demo video) | **Adam**: firm, a voice that cuts through | A firefighter's voice has to carry over noise, through a mask and a radio. | **Real strain.** Generated on `eleven_v4` with audio tags: `[panting]` when asking the way out through thick smoke, `[urgent, out of breath]` for the mayday. Then a radio filter. The contrast with Command's calm is the point of the design. |
+| **Narrator** (the demo video) | **Daniel**: steady broadcaster | Clear and neutral, so judges follow the story without it competing with the fireground voices. | **Neutral.** |
+
+**Tuning the feeling, not just the words:**
+- The commander's brief and the radio messages use expressive settings (stability 0.3, style 0.6, speaker boost), so an urgent "all crews: flashover, keep clear" *sounds* urgent and still stays clear.
+- The live agent uses `eleven_v4_turbo` for a quick reply, with steadier settings (stability 0.5, normal speed), so Command never sounds rushed, even when the situation is.
+- The agent never raises its voice to compete. Urgent news is spoken into the call only while the firefighter is not talking, and the firefighter can interrupt the agent at any time.
+
 ## How I measured it
 
 `node scripts/evaluate.js 100`: 100 simulated fires of 110 seconds each. Each run has the fire spreading at 1x to 3x, a cut link between the wings, an 8-second radio jam, and up to two extra sensor failures. Every half second, every live node's belief about every room is compared with the truth.
@@ -103,7 +118,7 @@ Plain JavaScript modules in the browser, and one small Node server with no depen
 
 - **Neptune North (actors work better together):** many actors, one goal (find everyone), each deciding alone, and still working when communication is cut, jammed or burnt.
 - **Accenture:** the fire roll call is a process everyone accepts as "just how it works". AI reads the building from a photo, writes the brief and talks to the firefighter, while the safety decisions stay with rules and people.
-- **MLH Best Use of ElevenLabs:** voice is the only interface that works inside a burning building; the agent is calm, interruptible and grounded in live data.
+- **MLH Best Use of ElevenLabs:** voice is the only interface that works inside a burning building. Each voice was chosen for its job and its feeling: Command is warm and steady against the firefighter's breathless urgency, interruptible, and grounded in live data.
 - **MLH Best Use of Gemini API:** four Gemini features on Vertex AI, each checked against the data, none trusted with a safety decision.
 
 ## Built with

@@ -204,6 +204,18 @@ Each script is about 3 minutes. If you only get 60 seconds, do the steps marked 
 - **It never makes things up.** The agent knows nothing about the fire except what its four tools return: `get_situation`, `get_directions`, `report`, `mayday`. It must call `get_situation` before answering, read directions back exactly, and never say a room is empty unless the data says confirmed empty.
 - **Command can break in.** When the incident changes during a call (a flashover, a new order to withdraw), the phone sends "URGENT FROM COMMAND" into the call, only while the agent is listening, so the agent is never talked over and passes it on in its own words.
 
+**How the voices were chosen, and the feeling in them** (lead with this; it is what makes the entry stand out):
+
+| Who | Voice | Why | Feeling |
+|---|---|---|---|
+| **Command** (agent, brief, radio) | Alexis Lancaster: warm, gentle, middle-aged British female | The opposite of the fireground. Stands out from mostly male crew voices, so "this is Command" is clear from the first word. British, like the crews it would serve. | **Calm and steady**: short sentences, one instruction at a time. A steady voice says "someone has this under control", so a frightened person follows the instruction. |
+| **Firefighter R1** (video) | Adam: firm, cuts through | Must carry through a mask, a radio and noise. | **Real strain**: `eleven_v4` audio tags `[panting]` and `[urgent, out of breath]`, plus a radio filter. |
+| **Narrator** (video) | Daniel: steady broadcaster | Neutral, so the story is easy to follow. | Neutral. |
+
+- **Tuned for feeling:** the brief and the radio use expressive settings (stability 0.3, style 0.6), so urgent news *sounds* urgent and still stays clear. The live agent uses steadier settings (stability 0.5, normal speed) on `eleven_v4_turbo`, so Command answers quickly but never sounds rushed.
+- **Say it in one line:** "The firefighter sounds like he's in a fire. Command sounds like the calmest person on the radio. That contrast is the design."
+- **In the demo:** play the firefighter's panting question from the video, then let the judge hear Command's calm answer live on the phone.
+
 **Where ElevenLabs is used:**
 
 | Feature | ElevenLabs part |
