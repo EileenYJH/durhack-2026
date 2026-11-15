@@ -43,7 +43,7 @@ Use the metaphor to open and to close; in between, show the real system. Don't o
 | Firefighter phone | Your phone. On the board, press **Firefighter phones**, scan the QR code, choose **R1**, **Go on air**. The phone must use the `https://` link, or the microphone will not work. |
 | Sound | Laptop volume up. The phone's call uses the phone's own speaker and microphone. |
 | Voice agent | Press **Talk to Command** once on the phone and say "Command, R1, radio check". Hang up. If it fails, ElevenLabs credits or the agent ID are the problem; use the video for the voice part. |
-| Gemini | On the **Building** page, upload `tlc-level-00.webp` once. If Gemini is slow or fails, the built-in building still works for everything else. |
+| Gemini | On the **Building** page, upload **image-1** (TLC level 00, the ground floor) or **image-2** (level 01). Each takes about 10 to 30 seconds. Readings vary a little each time; if **Use this building** stays disabled, upload again. **Level 01 has no street exit** (people leave by the stairs), so the repair adds an exit where it can: drag the green exit square to a stairwell before you demo it. If Gemini is slow or fails, the built-in building still works for everything else. |
 | Backup | `demo-video/aria-demo-small.mp4` on the laptop, ready to play. If the Wi-Fi dies, show the video and keep talking. |
 | Not shown | The camera nodes (**Live nodes** page) are a future extension. Do not open it. The `dashboard.html` page is also not part of this demo. |
 
@@ -89,6 +89,10 @@ Pick a mode, then click on the plan. Each one shows what happens when the real w
 | **Firefighter down** | A firefighter | A mayday for that firefighter. | The nearest free teammate breaks off on their own, walks to them, and brings them out together. |
 | **Jam radio 10 s** | (button) | All radio lost for 10 seconds. | Everyone keeps working from their last picture; nothing is lost when it comes back. |
 | **Fire speed 1x** | (button) | Makes the fire spread faster. | "Every second changes the decision." |
+
+**What just happened (banner, highlight, latest events)**
+
+Every action you take, and every big moment the incident produces by itself, shows a **banner over the top of the plan** for about 7 seconds. It covers mayday, a teammate breaking off, a teammate reaching them, flashover, a crew pulling out, and the nodes agreeing again. Each banner says what happened and **what to watch**, and a **pulsing outline** marks the place on the plan. The **three latest events** are listed just under the plan, so you never need to scroll down to the Log. In a demo, read the banner's "watch" line aloud: it is your script.
 
 **The plan**
 
