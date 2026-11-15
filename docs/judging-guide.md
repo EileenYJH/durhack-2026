@@ -14,6 +14,23 @@ Everything here was checked against the code and against `docs/evaluation.md`. I
 >
 > On top of that, a firefighter can **just talk to Command**, a live ElevenLabs voice that answers from that firefighter's own live data and can be interrupted. And Gemini turns a photo of the evacuation plan on the wall into the building map in about 20 seconds.
 
+### The thread through every script: an orchestra with no one beating time
+
+DurHack's theme is **Composition**. Use one picture with every judge, so the theme runs through the whole pitch instead of being bolted on at the end:
+
+| In music | In ARIA | Say it when |
+|---|---|---|
+| **The score** | The building plan plus the shared rules (what a room's state is, who searches where). Every player reads the same score. | You import the photo, or show the search order |
+| **The players** | Every sensor, door counter, firefighter and the command post. Each plays one part, from what it can hear. | You raise the alarm, or click **Inspect** |
+| **A part drops out** | A sensor burns, the radio is cut. That part goes quiet and is marked **unknown**. The piece does not stop. | **Cut the link**, **Kill a sensor**, **Start a fire** |
+| **Back in time** | When the players hear each other again, they agree again within seconds. | You restore the link: **Agreed again after … s** |
+| **The conductor** | The incident commander. They shape the performance, but they do not play every note, and the orchestra keeps going if they look away. | Any question about the commander or "no central server" |
+| **The voices** | Command calm and steady, the firefighter strained and breathless, the narrator neutral, music under the cards: arranged like parts. | **Talk to Command**, the video |
+
+**One line to open with:** "ARIA is an orchestra with no one beating time. Every sensor and firefighter plays its own part from what it can hear, and when the fire takes players out, the piece goes on."
+
+Use the metaphor to open and to close; in between, show the real system. Don't overdo it: one music word per step is enough.
+
 **What is real and what is simulated.** The fire, the people and the sensors are simulated in the browser. The software that would run on real devices is real: the belief rules, the copying between devices, the search assignment, the routing, the phone app, the voice agent and the Gemini import. Say this up front. Judges trust you more for it.
 
 ---
@@ -144,14 +161,16 @@ Each script is about 3 minutes. If you only get 60 seconds, do the steps marked 
 
 **Your angle:** in a fire, **every second changes the right decision, and the radio is the first thing to fail**. ARIA gets the most out of every moment of contact, and keeps everyone deciding well between those moments.
 
+0. **Open (10 s):** "Your challenge is actors that work better together without a hub. In a fire that's life or death: the radio is the first thing to go. ARIA is an orchestra with no one beating time."
 1. ★ **Raise alarm.** "A sensor on every door and in every room, three firefighters and the command post. Each has its own copy of the building. There is no server holding the truth."
-2. **Inspect:** click R1, then R3. "Two firefighters, two pictures. Each decides from its own picture."
-3. ★ **Search order.** "The common goal is to find everyone. Nobody hands out rooms: each firefighter runs the same rules on its own copy, so they split the rooms without one radio call. If R2 already took Lab 2, R3 sees that claim and goes elsewhere."
-4. ★ **Cut the link.** "The fire has taken out the radio between the two wings." Point at **What each node believes**: the columns start to disagree. Rooms that nobody can hear from turn **unknown**, never empty. "Firefighters on each side keep searching from what they last heard."
-5. ★ **Cut the link** again to restore it. Point at **Agreed again after … s**. "As soon as they hear each other, they agree again. Nothing is lost, and no clocks needed to match: each record carries its age, not a timestamp."
+2. **Inspect:** click R1, then R3. "Two firefighters, two pictures. Each plays its own part from what it can hear."
+3. ★ **Search order.** "The common goal is to find everyone. Nobody hands out rooms: every firefighter reads the same score, the same rules, on its own copy, so they split the rooms without one radio call. If R2 already took Lab 2, R3 sees that claim and goes elsewhere."
+4. ★ **Cut the link.** "The fire has taken out the radio between the two wings." Point at **What each node believes**: the columns start to disagree. Rooms that nobody can hear from turn **unknown**, never empty. "Parts have dropped out, but the piece goes on: firefighters on each side keep searching from what they last heard."
+5. ★ **Cut the link** again to restore it. Point at **Agreed again after … s**. "As soon as they hear each other, they're back in time. Nothing is lost, and no clocks needed to match: each record carries its age, not a timestamp."
 6. **Start a fire** in a room next to a firefighter. "Heat spreads through the door, the sensor dies (cross), and the room goes unknown. The firefighter pulls out on their own while the way out is still below 240°C. Before we added that rule, 57 firefighters in 100 runs were caught in flashovers. After it, none."
 7. ★ **Firefighter down** on R1 (or **Mayday** from the phone). "Nobody assigns the rescue. The nearest free teammate sees the mayday in its own copy, breaks off, walks to R1 and brings them out together."
 8. **Jam radio 10 s.** "Total radio loss. Watch the board: everyone keeps going."
+9. **Close:** "Every second the fire changes the right decision. ARIA makes every moment of contact count, and keeps everyone deciding well in between."
 
 **How ARIA makes the most of each moment of contact** (say these while the demo runs):
 - **One order per firefighter**, with the reason and the route, instead of a stream of raw sensor data.
@@ -169,7 +188,7 @@ Each script is about 3 minutes. If you only get 60 seconds, do the steps marked 
 **The process everyone accepts:** at the assembly point, someone walks along the line with a register asking "is everyone here?". Badge systems know who came in, not who is still in which room. The fire panel knows where there is smoke, not where there are people. Firefighters search rooms that are already empty, and the one radio channel is full. Everyone treats this as "just how it works".
 
 1. ★ **Building** → upload the evacuation plan photo. "Every building already has this plan on the wall. Gemini turns it into a working map in about 20 seconds, and ARIA repairs the gaps. Today pre-incident plans are drawn by hand, if at all."
-2. ★ Back to the board: **Raise alarm**. "The roll call now runs itself, room by room, from sensors and from the firefighters' own reports."
+2. ★ Back to the board: **Raise alarm**. "The roll call now composes itself, room by room, from sensors and from the firefighters' own reports, instead of one person with a clipboard at the assembly point."
 3. ★ **Read the brief.** "Gemini writes the commander's brief from the live data, and ElevenLabs reads it. Responsible AI: the AI never decides. If Gemini calls any room empty that the data does not confirm, we throw the brief away and read the plain rule-based one. The screen says which one you heard."
 4. **Talk to Command** on the phone. "A firefighter asks in plain words and gets an answer from live data, instead of waiting for a gap on the radio."
 5. **Feasibility:** "It runs in a browser on phones and laptops that already exist. It works without the AI: every AI feature has a rule-based fallback."
@@ -178,12 +197,51 @@ Each script is about 3 minutes. If you only get 60 seconds, do the steps marked 
 
 **Their criteria:** creativity and innovation; technical competence and execution; research and learning; polish and completion.
 
-**Your angle: impact.** Composition here means many partial, failing pictures composed into one answer you can trust.
+**Your angle: impact, told as a composition.** Many partial, failing pieces composed into one answer you can trust, with lives depending on it. Present it as a short piece in five movements. The structure is itself the nod to the theme, and it keeps you on time.
 
-1. ★ The story (section 0), then **Raise alarm** and **Cut the link**: "many small pictures, none complete, composed into one answer that stays honest when parts of it fail."
-2. ★ **Firefighter down** → rescue. "The system protects the rescuers, not just the occupants."
-3. **Research and learning:** show `docs/evaluation.md`. "We measured it: 100 random fires, more than half the sensors destroyed (56.8%), and an occupied room was shown as empty in 0.353% of checks. Zero rooms wrongly empty at the end of any run. Measuring made us fix flashover deaths (57 → 0) and halve the number of searches (1,082 → 571). And we say what is still weak: 29.6% of searches repeat a room while the radio is cut."
-4. **Why existing tools fall short** (see the table below).
+**Opening (20 s, no screen yet).** Look at the judge, not the laptop:
+> "The theme is Composition. I took it literally: how do you compose one truth out of pieces that are breaking? At a building fire, the commander has to decide every minute: send crews in, or fight from outside. It all depends on one question: who is still inside? And the fire destroys the sensors and the radio that answer it. ARIA is an orchestra with no one beating time."
+
+**I. The score: a drawing becomes the building (30 s).** ★
+**Building** → upload the evacuation plan photo.
+> "Every building has this drawing on the wall, made for people. Gemini reads it and ARIA turns it into a map the system can reason about, with the drawing kept underneath so a person checks every wall. This is our score."
+
+(If time is short, skip the upload and say it over the built-in building.)
+
+**II. The players: each plays its own part (30 s).** ★
+**Raise alarm**, then **Inspect** two firefighters.
+> "Sensors, door counters, firefighters, the command post: each is a player with its own copy of the building, reading the same rules. Nobody hands out rooms. They split the search between them without a word on the radio."
+
+**III. Parts drop out: the fire takes players away (40 s).** ★
+**Start a fire** next to a sensor, then **Cut the link**. Point at the crossed-out sensor and at **What each node believes**.
+> "The fire burns a sensor, then cuts the radio between the wings. Those parts go silent, and silence is never read as 'empty': those rooms turn unknown. The piece doesn't stop: each side keeps searching from what it last heard."
+
+**IV. Back in time (20 s).** ★
+**Cut the link** again to restore it. Point at **Agreed again after … s**.
+> "When the players can hear each other again, they're back in time within seconds. No referee, no shared clock."
+
+**V. The voices: calm against the fire (40 s).**
+On the phone, **Talk to Command**: "Command, R1, smoke's getting thick, what's my way out?" Then interrupt: "Mayday, mayday, I'm trapped!" Watch the board: a teammate breaks off, walks to R1 and brings them out together.
+> "The firefighter sounds like they're in a fire. Command sounds like the calmest person on the radio, and it stops the moment you cut in. That contrast is arranged on purpose, like parts in a score. And nobody had to order the rescue: the nearest player came in on their own."
+
+**Coda: why it matters (30 s).** ★
+Show the measured results (`docs/evaluation.md`, or the last card of the video):
+> "We measured it, not just built it. Across 100 random fires, with more than half the sensors destroyed, an occupied room was shown as empty in about a third of one percent of checks, and never at the end of a run. Measuring made me fix things: firefighters caught in flashovers went from 57 to 0. And I'll tell you what's still weak: firefighters still repeat each other's searches while the radio is cut."
+>
+> "Today the answer comes from a clipboard at the assembly point and a fire panel that knows about smoke, not people. ARIA composes it from everything still standing, and says 'unknown' instead of guessing."
+
+**60-second version:** opening line → **Raise alarm** → **Cut the link** ("parts drop out, the piece goes on, unknown never empty") → restore ("back in time") → the coda's first sentence.
+
+**How this maps to their criteria:**
+
+| Criterion | Where they see it |
+|---|---|
+| Creativity and innovation | The orchestra framing; a technique from collaborative editing applied to a burning building; a photo of a drawing becoming the system's map; voices arranged for feeling |
+| Technical competence and execution | Copies that merge in any order, with no shared clock; a fire that spreads and burns sensors; a live interruptible voice agent; Gemini outputs checked against the data |
+| Research and learning | 100 measured fires; the rules that measuring forced (flashover 57 → 0, searches 1,082 → 571); what is still weak, said out loud |
+| Polish and completion | Works end to end on a phone and a laptop, live on the web; recorded video; 53 tests |
+
+**Why existing tools fall short** (have this ready if they ask about impact):
 
 | What exists today | What it knows | What it misses |
 |---|---|---|
@@ -213,7 +271,7 @@ Each script is about 3 minutes. If you only get 60 seconds, do the steps marked 
 | **Narrator** (video) | Daniel: steady broadcaster | Neutral, so the story is easy to follow. | Neutral. |
 
 - **Tuned for feeling:** the brief and the radio use expressive settings (stability 0.3, style 0.6), so urgent news *sounds* urgent and still stays clear. The live agent uses steadier settings (stability 0.5, normal speed) on `eleven_v4_turbo`, so Command answers quickly but never sounds rushed.
-- **Say it in one line:** "The firefighter sounds like he's in a fire. Command sounds like the calmest person on the radio. That contrast is the design."
+- **Say it in one line:** "The firefighter sounds like he's in a fire. Command sounds like the calmest person on the radio. That contrast is the design: the voices are arranged like parts in a score, with the music rising only on the opening and closing and dropping away under the voices."
 - **In the demo:** play the firefighter's panting question from the video, then let the judge hear Command's calm answer live on the phone.
 
 **Where ElevenLabs is used:**
@@ -240,6 +298,8 @@ Each script is about 3 minutes. If you only get 60 seconds, do the steps marked 
 
 **The point to make:** "We use Gemini where it is strong (reading messy images, writing natural language) and never let it decide anything safety-critical. Every Gemini output is checked against the data, and every feature still works without it."
 
+**Theme link:** "Gemini writes the score: it turns a drawing made for people into a map the whole orchestra can read."
+
 **Demo (60 s):** ★ **Building** → upload the photo → show the plan over the photo and the list of repairs → **Use this building** → **Read the brief** and point at "Written by Gemini from Command post's data".
 
 ---
@@ -257,6 +317,8 @@ Each script is about 3 minutes. If you only get 60 seconds, do the steps marked 
 **"But you have a server?"** Our server only **forwards** messages between devices (and holds the API keys for Gemini and ElevenLabs). It keeps no picture of the building. If it dies, every device keeps its copy and keeps deciding. In a real deployment the forwarding would go over whatever radio exists: Wi-Fi, Bluetooth or LoRa between devices. The sharing rules do not care how the messages travel.
 
 ### 4.2 The commander is still in charge: ARIA does not replace them
+
+**In one line:** "The commander is the conductor. A conductor shapes the performance but doesn't play every note, and a good orchestra keeps time if the conductor looks away. ARIA is what lets the orchestra keep time."
 
 **ARIA cannot replace the incident commander, and should not.** The commander carries legal responsibility and makes judgement calls no software should make: whether to send crews in at all, how much risk to accept to save a life, when to switch to defensive firefighting, when to call more crews.
 
@@ -337,6 +399,17 @@ A: ARIA repairs common mistakes (gaps between walls, missing doors, missing exit
 **Q: Why not let Gemini make the decisions?**
 A: Because a wrong decision in a fire can kill someone, and a language model cannot promise to be right. Rules make the decisions; Gemini reads images and writes words, and every output is checked.
 
+**The theme**
+
+**Q: How is this "Composition"? It isn't art or music.**
+A: Composition is making one whole out of parts. ARIA composes one truth (who is still inside) out of fragments that are each incomplete and that the fire keeps destroying: door counts, room sensors, firefighters' searches. It works like an orchestra without a conductor beating time: every player reads the same score, plays from what it can hear, and when players drop out the piece goes on. And the sound is composed for real: the voices are chosen and tuned for feeling, calm against strained, with music under the opening and closing.
+
+**Q: What is the "new combination"?**
+A: Three things that don't usually meet: the technique behind collaborative editing (copies that merge without a referee), the fireground, and AI that reads drawings and talks. The evacuation plan, a drawing for people, becomes the map the system reasons over.
+
+**Q: Did you sonify the data, so you can hear the board?**
+A: No. The sound composition is the voices and the music. Hearing the board (a tone per room) is an idea for later, not something we built.
+
 **The bigger picture**
 
 **Q: Who would buy this?**
@@ -368,5 +441,6 @@ A: Real sensors and cameras as nodes; device-to-device radio instead of the rela
 
   Use the figures in this guide and in `docs/evaluation.md`.
 - Do not say the camera feature works in smoke.
+- Do not say the board plays music or that rooms have tones. The composition is the system, the voices and the video's music.
 - Do not say ARIA replaces the incident commander.
 - Do not call "Actually inside" a real-world number. It exists only because this is a simulation.
