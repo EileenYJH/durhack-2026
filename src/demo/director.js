@@ -383,7 +383,9 @@ async function run(clips) {
     mark('r2', ffOnMap('R2'), 'R2 · now on the phone', { pad: 8 });
     mark('target', onPhone(`#ff-map [data-room="${burning}"]`), 'Tap: go here', { tone: 'fire', pad: 6 });
     await play('narrator', clips['n.steer'], NARRATION.steer);
-    B().document.querySelector(`#ff-map [data-room="${burning}"]`).dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    // a tap: press and release in the same place, as the phone map expects
+    const tapEl = B().document.querySelector(`#ff-map [data-room="${burning}"]`);
+    for (const type of ['pointerdown', 'pointerup']) tapEl.dispatchEvent(new B().PointerEvent(type, { bubbles: true, button: 0, clientX: 10, clientY: 10 }));
     mark('burning', roomOnMap(burning), 'Believed burning', { tone: 'fire', pad: 4, pulse: true });
     const ok = await cut(waitFor(() => [...B().document.querySelectorAll('#ff-radio li')].some((li) => /refused/i.test(li.textContent)), 8000), 0.4);
     const li = [...B().document.querySelectorAll('#ff-radio li')].reverse().find((x) => /refused/i.test(x.textContent));

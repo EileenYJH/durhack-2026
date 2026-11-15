@@ -164,13 +164,24 @@ function drawMap(b, c) {
 }
 
 // ---- steering -------------------------------------------------------------------------
-$('ff-map').addEventListener('click', (e) => {
-  const room = e.target.closest('[data-room]')?.dataset.room;
+// The map is redrawn every second; a tap that spans a redraw never becomes a
+// 'click'. Remember what the finger went down on, and act when it lifts without
+// having moved (moving means scrolling).
+let press = null;
+$('ff-map').addEventListener('pointerdown', (e) => {
+  press = { room: e.target.closest('[data-room]')?.dataset.room, x: e.clientX, y: e.clientY };
+});
+$('ff-map').addEventListener('pointerup', (e) => {
+  const p = press;
+  press = null;
+  if (p?.room && Math.hypot(e.clientX - p.x, e.clientY - p.y) < 10) steer(p.room);
+});
+function steer(room) {
   if (!room || !window.rcState) return;
   const b = window.rcState.feed.building;
   send({ type: 'cmd', ff: me.ff, action: 'goto', room });
   $('ff-control').textContent = `Order sent: go to ${room === 'OUT' ? 'the nearest safe exit' : b.rooms[room]?.name ?? room}.`;
-});
+}
 $('ff-auto').addEventListener('click', () => send({ type: 'cmd', ff: me.ff, action: 'auto' }));
 
 // ---- voice ----------------------------------------------------------------------

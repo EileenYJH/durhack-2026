@@ -287,7 +287,18 @@ function pick(e) {
   else return;
   drawPanels();
 }
-map.addEventListener('click', pick);
+// The live layer is redrawn every frame, so the element under the pointer is
+// usually replaced before the button comes up and a 'click' never fires.
+// Remember what was pressed, and act on release unless the pointer moved (a scroll).
+let press = null;
+map.addEventListener('pointerdown', (e) => {
+  press = e.button === 0 ? { e, x: e.clientX, y: e.clientY } : null;
+});
+map.addEventListener('pointerup', (e) => {
+  const p = press;
+  press = null;
+  if (p && Math.hypot(e.clientX - p.x, e.clientY - p.y) < 10) pick(p.e);
+});
 map.addEventListener('keydown', (e) => {
   if (e.key === 'Enter' || e.key === ' ') {
     e.preventDefault();
