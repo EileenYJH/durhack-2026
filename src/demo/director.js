@@ -338,31 +338,32 @@ async function run(clips) {
     const mayP = B().rcTextCall.ask(strip(FF.mayday));
     await play('firefighter', clips['f.mayday'], FF.mayday);
     mark('r1', ffOnMap('R1'), 'MAYDAY · R1', { tone: 'fire', pad: 8, pulse: true });
-    await live('command', await cut(mayP));
-    let rescuer = null;
-    const rescued = await cut(
-      waitFor(() => {
+    // The crew reacts while Command is still talking, so the callouts follow
+    // the sim's own log from now on, not the script's pace.
+    const stage = { rescuer: null, reached: false };
+    const watch = setInterval(() => {
+      if (!stage.rescuer) {
         const e = sim().log.find((x) => /breaks off to reach Responder 1/.test(x.text));
-        if (e) rescuer = byLabel(e.text.split(' breaks off')[0]);
-        return Boolean(e);
-      }, 20000, 300),
-      1.0,
-    );
+        if (!e) return;
+        stage.rescuer = byLabel(e.text.split(' breaks off')[0]);
+        if (stage.rescuer) mark('rescuer', ffOnMap(stage.rescuer.id), `${stage.rescuer.id} breaks off to help`, { tone: 'go', pad: 8 });
+      }
+      if (!stage.reached && sim().log.some((x) => /has reached Responder 1/.test(x.text))) {
+        stage.reached = true;
+        unmark('rescuer');
+        mark('r1', ffOnMap('R1'), `${stage.rescuer?.id ?? 'Teammate'} has R1 · both coming out`, { tone: 'go', pad: 8 });
+        clearInterval(watch);
+      }
+    }, 150);
+    await live('command', await cut(mayP));
+    const rescued = await cut(waitFor(() => stage.rescuer, 20000, 200), 1.0);
     if (rescued) {
       music('narration');
-      if (rescuer) mark('rescuer', ffOnMap(rescuer.id), `${rescuer.id} breaks off to help`, { tone: 'go', pad: 8 });
-      // keep the callouts true: once the teammate reaches R1, R1 is no longer a mayday
-      const reached = () => sim().log.some((x) => /has reached Responder 1/.test(x.text));
-      const watch = setInterval(() => {
-        if (!reached()) return;
-        clearInterval(watch);
-        unmark('rescuer');
-        mark('r1', ffOnMap('R1'), `R1 reached · both coming out`, { tone: 'go', pad: 8 });
-      }, 200);
       await play('narrator', clips['n.mayday'], NARRATION.mayday);
       await sleep(2500);
       clearInterval(watch);
     } else {
+      clearInterval(watch);
       demo.notes.push('No teammate broke off within 20 s, so that line was left out.');
       await sleep(2500);
     }

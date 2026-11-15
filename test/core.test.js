@@ -454,3 +454,40 @@ test('a firefighter can be steered from the phone, refuses a burning room, and g
   assert.equal(sim.command('R1', 'AUTO'), 'Back on automatic tasking.');
   assert.equal(r1.manual, false);
 });
+
+test('a rescued firefighter is brought out with the rescuer, not on their own', () => {
+  for (const seed of [3, 6, 11]) {
+    const sim = createSim(seed);
+    const step = () => sim.step(0.1);
+    for (let i = 0; i < 50; i++) step();
+    sim.raiseAlarm();
+    // wait until R1 is inside, then down
+    for (let i = 0; i < 600 && !(sim.node('R1').room !== 'OUT' && sim.node('R1').status === 'ok'); i++) step();
+    if (sim.node('R1').room === 'OUT') continue;
+    sim.mayday('R1');
+    const downAt = { x: sim.node('R1').x, y: sim.node('R1').y };
+    let rescuer = null;
+    for (let i = 0; i < 1500 && !rescuer; i++) {
+      step();
+      const e = sim.log.find((x) => /has reached Responder 1/.test(x.text));
+      if (e) rescuer = sim.nodes.find((n) => e.text.startsWith(n.label));
+    }
+    if (!rescuer) continue;
+    const r1 = sim.node('R1');
+    assert.ok(Math.hypot(rescuer.x - downAt.x, rescuer.y - downAt.y) < 25, `seed ${seed}: R1 was "reached" from across the room`);
+    // from here until they are out, R1 is always in the rescuer's room, beside them
+    for (let i = 0; i < 1500 && r1.escort; i++) {
+      step();
+      assert.equal(r1.room, rescuer.room, `seed ${seed}: R1 left the rescuer`);
+      assert.ok(Math.hypot(r1.x - rescuer.x, r1.y - rescuer.y) < 20, `seed ${seed}: R1 is not beside the rescuer`);
+    }
+    assert.equal(r1.escort, null, `seed ${seed}: never got out`);
+    assert.equal(r1.room, 'OUT');
+    assert.equal(rescuer.room, 'OUT');
+    assert.equal(rescuer.path.length, 0, `seed ${seed}: the rescuer still had somewhere to go`);
+    assert.ok(Math.hypot(r1.x - rescuer.x, r1.y - rescuer.y) < 20, `seed ${seed}: R1 stopped short of the assembly point`);
+    assert.match(sim.command('R1', 'OUT'), /outside|Holding|refused|low air|cylinder/i);
+    return;
+  }
+  assert.fail('no seed produced a rescue to check');
+});

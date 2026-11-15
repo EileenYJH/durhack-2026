@@ -369,6 +369,7 @@ function crewFeed() {
       let directive;
       if (!n.alive) directive = 'No contact.';
       else if (n.status === 'mayday') directive = 'MAYDAY. Stay where you are and keep your alarm sounding. Help is coming.';
+      else if (n.escort) directive = `Stay with ${sim.node(n.escort).id}. They are bringing you out.`;
       else if (n.status === 'low-air') {
         goal = 'OUT';
         directive = `Withdraw to the nearest safe exit. Air ${Math.round(n.air)}%.`;

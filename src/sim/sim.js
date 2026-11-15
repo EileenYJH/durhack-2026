@@ -167,7 +167,7 @@ export function createSim(seed = 7) {
   addNode({ id: 'POST', kind: 'post', label: 'Command post', ...at(60, 0) });
   [[40, -55], [40, 55], [85, -40]].forEach(([along, across], i) => {
     const home = at(along, across);
-    addNode({ id: `R${i + 1}`, kind: 'responder', label: `Responder ${i + 1}`, room: 'OUT', ...home, home, path: [], speed: 70, target: null, mission: null, searching: 0, air: 100 - i * 9, status: 'ok', refused: {}, checked: {}, manual: false });
+    addNode({ id: `R${i + 1}`, kind: 'responder', label: `Responder ${i + 1}`, room: 'OUT', ...home, home, path: [], speed: 70, target: null, mission: null, searching: 0, air: 100 - i * 9, status: 'ok', refused: {}, checked: {}, manual: false, escort: null });
   });
 
   const byId = Object.fromEntries(sim.nodes.map((n) => [n.id, n]));
@@ -482,7 +482,7 @@ export function createSim(seed = 7) {
     const hazards = buildingHazard(node.rep, ROOM_IDS, sim.t);
     const blocked = blockedDoors(node.rep);
     if (node.status === 'low-air') {
-      if (!node.path.length && node.room !== 'OUT') withdraw(node, hazards, blocked);
+      if (!node.escort && !node.path.length && node.room !== 'OUT') withdraw(node, hazards, blocked);
       return;
     }
 
@@ -566,17 +566,23 @@ export function createSim(seed = 7) {
   function arrive(node) {
     if (node.mission) {
       const mate = byId[node.mission];
+      // In the right room is not the same as beside them: in a big hall, cross it first.
+      if (mate.room === node.room && mate.status === 'mayday' && mate.alive && Math.hypot(mate.x - node.x, mate.y - node.y) > 18) {
+        node.path = [{ x: mate.x, y: mate.y }];
+        return;
+      }
       if (mate.room === node.room && mate.status === 'mayday' && mate.alive) {
+        // The rescuer brings the casualty out: one route, together, at the
+        // casualty's pace, on the rescuer's spare air.
         mate.status = 'low-air';
-        mate.air = Math.max(mate.air, 12);
-        mate.speed = 45;
-        say(`${node.label} has reached ${mate.label}. Both are withdrawing.`, 'ok');
+        mate.air = Math.max(mate.air, 50);
+        mate.path = [];
+        mate.escort = node.id;
+        say(`${node.label} has reached ${mate.label} and is bringing them out.`, 'ok');
         sim.stats.crewRecovered += 1;
-        const hazards = buildingHazard(node.rep, ROOM_IDS, sim.t);
-        const blocked = blockedDoors(node.rep);
-        withdraw(mate, hazards, blocked);
         node.status = 'low-air';
-        withdraw(node, hazards, blocked);
+        node.speed = 45;
+        withdraw(node, buildingHazard(node.rep, ROOM_IDS, sim.t), blockedDoors(node.rep));
       } else {
         node.checked[node.mission] = sim.t;
         say(`${node.label} found no one from the crew in ${name(node.room)}`, 'info');
@@ -612,6 +618,27 @@ export function createSim(seed = 7) {
     node.target = null;
   }
 
+  // A casualty being brought out stays at the rescuer's side, whoever is stepped first.
+  function followLead(node) {
+    const lead = byId[node.escort];
+    if (!lead.alive || lead.status === 'mayday') {
+      node.escort = null;
+      mayday(node, `lost contact with ${lead.label}`);
+      return;
+    }
+    node.room = lead.room;
+    node.x = lead.x - 9;
+    node.y = lead.y + 9;
+    // together all the way to the assembly point, not just over the threshold
+    if (lead.room === 'OUT' && !lead.path.length) {
+      node.escort = null;
+      node.status = 'refill';
+      node.speed = 70;
+      node.refillUntil = sim.t + 6;
+      say(`${lead.label} and ${node.label} are out`, 'ok');
+    }
+  }
+
   function stepResponder(node, dt) {
     if (node.room !== 'OUT' && node.status !== 'refill') {
       node.air = Math.max(0, node.air - (0.4 + 0.5 * sim.rooms[node.room].smoke) * dt);
@@ -628,6 +655,10 @@ export function createSim(seed = 7) {
       }
     }
     if (node.status === 'mayday') return;
+    if (node.escort) {
+      followLead(node);
+      return;
+    }
     if (node.searching > 0) {
       node.searching -= dt;
       if (node.searching <= 0) arrive(node);
@@ -660,6 +691,7 @@ export function createSim(seed = 7) {
         node.refillUntil = sim.t + 6;
       } else if (node.target && node.room === node.target) node.searching = node.mission ? 1 : 3;
     }
+    for (const m of sim.nodes) if (m.escort === node.id) followLead(m);
   }
 
   // ---- step ---------------------------------------------------------------
@@ -805,6 +837,7 @@ export function createSim(seed = 7) {
       return tell('Back on automatic tasking.');
     }
     if (n.status === 'mayday') return tell('You are down. Stay where you are, help is coming.');
+    if (n.escort) return tell(`Order refused: stay with ${byId[n.escort].label}, they are bringing you out.`);
     if (n.status === 'refill') return tell('Order refused: you are changing your cylinder at the entrance.');
     if (n.status === 'low-air') return tell(n.air < 30 ? 'Order refused: you are withdrawing on low air.' : 'Order refused: you are pulling out, your way out is at risk.');
     if (room !== 'OUT' && !(room in ROOMS)) return tell('That place is not on the plan.');

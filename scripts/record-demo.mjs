@@ -134,7 +134,12 @@ ws.close();
 chrome.kill();
 server.kill();
 await sleep(1500);
-rmSync(path.join(WORK, 'profile'), { recursive: true, force: true }); // a browser profile has no place in the project
+try {
+  // a browser profile has no place in the project; Chrome may take a moment to let go of it
+  rmSync(path.join(WORK, 'profile'), { recursive: true, force: true, maxRetries: 20, retryDelay: 500 });
+} catch {
+  log('could not delete the browser profile yet: delete demo-video/work/profile by hand');
+}
 log(`captured ${frames.length} frames, ${result.audio.length} voice clips`);
 for (const n of result.notes) log('note:', n);
 writeFileSync(path.join(WORK, 'session.json'), JSON.stringify({ frames, result }));
