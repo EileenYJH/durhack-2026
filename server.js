@@ -37,6 +37,7 @@ const gemini = createGemini();
 const ELEVEN_KEY = process.env.ELEVENLABS_API_KEY;
 const ELEVEN_VOICE = process.env.ELEVENLABS_VOICE_ID ?? 'JBFqnCBsd6RMkjVDRZzb';
 const ELEVEN_MODEL = process.env.ELEVENLABS_MODEL ?? 'eleven_flash_v2_5';
+const ELEVEN_AGENT = process.env.ELEVENLABS_AGENT_ID; // the "Command" voice agent (scripts/setup-voice-agent.js)
 
 // Voice settings for fire incident context: urgent, clear, authoritative
 const ELEVEN_VOICE_SETTINGS = {
@@ -202,6 +203,16 @@ async function brief(req, res) {
   }
 }
 
+// A short-lived token so a phone can open a live voice call with the Command
+// agent without ever seeing the API key.
+async function voiceToken(req, res) {
+  if (!ELEVEN_KEY || !ELEVEN_AGENT) return send(res, 503, { error: 'Voice calls need ELEVENLABS_API_KEY and ELEVENLABS_AGENT_ID.' });
+  const r = await fetch(`https://api.elevenlabs.io/v1/convai/conversation/token?agent_id=${encodeURIComponent(ELEVEN_AGENT)}`, { headers: { 'xi-api-key': ELEVEN_KEY } });
+  const out = await r.json().catch(() => ({}));
+  if (!r.ok || !out.token) return send(res, 502, { error: `ElevenLabs returned ${r.status}`, detail: JSON.stringify(out.detail ?? out).slice(0, 200) });
+  send(res, 200, { token: out.token });
+}
+
 async function speak(req, res) {
   if (!ELEVEN_KEY) return send(res, 503, { error: 'no ELEVENLABS_API_KEY set' });
   const { text } = JSON.parse(await readBody(req));
@@ -247,10 +258,11 @@ const server = http.createServer(async (req, res) => {
     const id = (url.searchParams.get('id') ?? '').slice(0, 60);
     if (url.pathname === '/mesh/stream' && req.method === 'GET') return stream(req, res, mesh, id);
     if (url.pathname === '/mesh/send' && req.method === 'POST') return await relay(req, res, mesh, id);
-    if (url.pathname === '/api/status') return send(res, 200, { gemini: gemini.ready(), provider: gemini.provider, elevenlabs: Boolean(ELEVEN_KEY), peers: meshes.get(mesh)?.size ?? 0 });
-    if (['/api/brief', '/api/speak', '/api/layout', '/api/directions', '/api/voice-parse', '/api/voice-report'].includes(url.pathname) && limited(req)) return send(res, 429, { error: 'Too many requests. Wait a minute.' });
+    if (url.pathname === '/api/status') return send(res, 200, { gemini: gemini.ready(), provider: gemini.provider, elevenlabs: Boolean(ELEVEN_KEY), voiceAgent: Boolean(ELEVEN_KEY && ELEVEN_AGENT), peers: meshes.get(mesh)?.size ?? 0 });
+    if (['/api/brief', '/api/speak', '/api/layout', '/api/directions', '/api/voice-parse', '/api/voice-report', '/api/voice-token'].includes(url.pathname) && limited(req)) return send(res, 429, { error: 'Too many requests. Wait a minute.' });
     if (url.pathname === '/api/brief' && req.method === 'POST') return await brief(req, res);
     if (url.pathname === '/api/speak' && req.method === 'POST') return await speak(req, res);
+    if (url.pathname === '/api/voice-token' && req.method === 'GET') return await voiceToken(req, res);
     if (url.pathname === '/api/layout' && req.method === 'POST') return await layout(req, res);
     if (url.pathname === '/api/directions' && req.method === 'POST') return await directions(req, res);
     if (url.pathname === '/api/voice-parse' && req.method === 'POST') return await voiceParse(req, res);

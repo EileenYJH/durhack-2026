@@ -391,3 +391,16 @@ body.ff.mayday .ff-top { background: #3a0b12; }
 .ff-actions button { background: #172128; color: #e4eae7; border-color: #e4eae7; padding: 14px 4px; font-size: 14px; }
 .ff-actions .ff-mayday { background: #f0475c; border-color: #f0475c; color: #14090b; }
 .ff-actions button.sent { background: #3fbf7f; border-color: #3fbf7f; color: #14202b; }
+
+/* ---- live voice call ---- */
+.ff-call { display: grid; gap: 8px; }
+.ff-call-btn { font: 700 22px/1 var(--display); padding: 18px 12px; background: #3fbf7f; border-color: #3fbf7f; color: #0f161b; letter-spacing: 0.06em; }
+.ff-call-btn.live { background: #f0475c; border-color: #f0475c; color: #14090b; }
+@media (prefers-reduced-motion: no-preference) {
+  .ff-call-btn.live { animation: onair 1.6s ease-in-out infinite; }
+  @keyframes onair { 50% { box-shadow: 0 0 0 6px rgba(240, 71, 92, 0.35); } }
+}
+.ff-call-status { margin: 0; font-size: 14px; color: #94a2a8; }
+.ff-call-status.ok { color: #3fbf7f; }
+.ff-call-status.bad { color: #f0475c; }
+.ff-call-log { max-height: 30vh; }

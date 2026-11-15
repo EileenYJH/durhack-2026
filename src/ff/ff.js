@@ -2,6 +2,8 @@
 // screen streams it: their order, the route, their air, what they believe
 // about the building, and radio traffic. The firefighter can answer back.
 
+import { setupCall } from './call.js';
+
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;');
 const params = new URLSearchParams(location.search);
@@ -45,8 +47,10 @@ function start() {
   send({ type: 'hello', ff: me.ff });
   setInterval(() => send({ type: 'hello', ff: me.ff }), 5000);
   setInterval(signal, 1000);
+  setupCall();
 }
 
+window.rcSend = (body) => send(body);
 function send(body) {
   fetch(`/mesh/send?mesh=${encodeURIComponent(me.code)}&id=${me.id}`, { method: 'POST', body: JSON.stringify({ ...body, from: me.id }) }).catch(() => {});
 }
@@ -66,6 +70,7 @@ function signal() {
 // ---- rendering ----------------------------------------------------------------
 function render(feed) {
   lastFeed = Date.now();
+  window.rcState = { feed, me };
   const c = feed.crews.find((x) => x.id === me.ff);
   if (!c) return;
 
@@ -165,7 +170,7 @@ $('ff-voice').addEventListener('click', (e) => {
 });
 
 function say(r) {
-  if (!voiceOn) return;
+  if (!voiceOn || window.rcCallActive) return; // the live call speaks instead
   speakQueue.push(r);
   // Keep up with the fire: if the queue grows, drop older routine messages.
   while (speakQueue.length > 2) {
