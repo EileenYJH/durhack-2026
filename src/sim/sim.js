@@ -13,6 +13,8 @@ export const RANGE = 265; // radio range in drawing units
 const CLAIM_TTL = 20; // seconds before a silent teammate's claim stops counting
 const PRESUMED_DOWN = 40; // seconds of silence inside before a teammate is presumed down
 const LOW_AIR = 30; // percent of air at which a firefighter must withdraw
+const FORCE_SECONDS = 10; // to force open a collapsed doorway to reach a downed teammate
+const FORCE_COST = 10 * 70; // the same time, as distance, when choosing who is nearest
 
 function rng(seed) {
   let a = seed >>> 0;
@@ -167,7 +169,7 @@ export function createSim(seed = 7) {
   addNode({ id: 'POST', kind: 'post', label: 'Command post', ...at(60, 0) });
   [[40, -55], [40, 55], [85, -40]].forEach(([along, across], i) => {
     const home = at(along, across);
-    addNode({ id: `R${i + 1}`, kind: 'responder', label: `Responder ${i + 1}`, room: 'OUT', ...home, home, path: [], speed: 70, target: null, mission: null, searching: 0, air: 100 - i * 9, status: 'ok', refused: {}, checked: {}, manual: false, escort: null });
+    addNode({ id: `R${i + 1}`, kind: 'responder', label: `Responder ${i + 1}`, room: 'OUT', ...home, home, path: [], speed: 70, target: null, mission: null, searching: 0, air: 100 - i * 9, status: 'ok', refused: {}, checked: {}, manual: false, escort: null, forcing: null });
   });
 
   const byId = Object.fromEntries(sim.nodes.map((n) => [n.id, n]));
@@ -462,10 +464,42 @@ export function createSim(seed = 7) {
     if (!goOut(node, fireRooms(hazards), blocked) && !goOut(node, new Set(), blocked)) mayday(node, 'no way out');
   }
 
+  // A firefighter can see the doorways of the room they are in. If a collapse
+  // has left no way out, that is a mayday now, not when the air runs low.
+  function trapped(node) {
+    if (node.room === 'OUT' || node.status === 'mayday' || node.escort) return false;
+    const blocked = blockedDoors(node.rep);
+    for (const d of doorsOf(node.room)) {
+      if (sim.blocked.has(d) && !blocked.has(d)) {
+        writeEnv(node.rep, `door:${d}`, node.id, { door: d, blocked: true }, sim.t);
+        blocked.add(d);
+        say(`${node.label} reports the doorway from ${name(node.room)} has collapsed`, 'warn');
+      }
+    }
+    const wayOut = exitDoors().some((e) => !blocked.has(e) && (innerRoom(e) === node.room || route(node.room, innerRoom(e), new Set(), blocked).length));
+    if (wayOut) return false;
+    mayday(node, 'trapped, the doorway has collapsed');
+    node.trapped = true;
+    return true;
+  }
+
   function responderTick(node) {
     const here = sim.rooms[node.room];
     if (here) writeEnv(node.rep, node.room, node.id, { room: node.room, temp: here.heat, rate: here.rate, smoke: here.smoke }, sim.t);
     writeClaim(node.rep, node.id, { target: node.target, room: node.room, x: node.x, y: node.y, status: node.status, air: Math.round(node.air), manual: node.manual }, sim.t);
+    // Trapped, not hurt: once someone has forced the way open, get out with them.
+    if (node.status === 'mayday' && node.trapped && !node.escort) {
+      const open = blockedDoors(node.rep);
+      const free = exitDoors().some((e) => !open.has(e) && (innerRoom(e) === node.room || route(node.room, innerRoom(e), new Set(), open).length));
+      if (free) {
+        node.trapped = false;
+        node.status = 'low-air';
+        say(`${node.label} has a way out again and is withdrawing`, 'ok');
+        withdraw(node, buildingHazard(node.rep, ROOM_IDS, sim.t), open);
+      }
+      return;
+    }
+    if (sim.alarm && trapped(node)) return;
     if (!sim.alarm || node.status === 'mayday' || node.searching > 0) return;
 
     if (node.status === 'refill') {
@@ -526,13 +560,15 @@ export function createSim(seed = 7) {
     const team = [{ id: node.id, room: node.room, x: node.x, y: node.y }, ...peers.filter((p) => p.status === 'ok' && p.age < CLAIM_TTL && !p.manual)];
     if (down.length) {
       const victim = down[0];
-      const reach = (r) => routeLength({ x: r.x, y: r.y }, r.room, victim.room, avoid, blocked);
+      // To reach a downed teammate a crew will force a collapsed doorway, so
+      // collapsed doors do not rule a rescuer out; each one costs time instead.
+      const reach = (r) => routeLength({ x: r.x, y: r.y }, r.room, victim.room, avoid, new Set()) + FORCE_COST * route(r.room, victim.room, avoid, new Set()).filter((d) => blocked.has(d)).length;
       const nearest = [...team].sort((a, b) => reach(a) - reach(b) || a.id.localeCompare(b.id))[0];
       if (nearest.id === node.id && Number.isFinite(reach(nearest))) {
         if (node.mission !== victim.id) {
           node.mission = victim.id;
           node.target = victim.room;
-          goTo(node, victim.room, avoid, blocked);
+          goTo(node, victim.room, avoid, new Set());
           say(`${node.label} breaks off to reach ${byId[victim.id].label} in ${name(victim.room)}${victim.status === 'mayday' ? '' : ` (silent ${Math.round(victim.age)} s)`}`, 'act');
         }
         return;
@@ -578,6 +614,7 @@ export function createSim(seed = 7) {
         mate.air = Math.max(mate.air, 50);
         mate.path = [];
         mate.escort = node.id;
+        mate.trapped = false;
         say(`${node.label} has reached ${mate.label} and is bringing them out.`, 'ok');
         sim.stats.crewRecovered += 1;
         node.status = 'low-air';
@@ -664,9 +701,24 @@ export function createSim(seed = 7) {
       if (node.searching <= 0) arrive(node);
       return;
     }
+    if (node.forcing) {
+      if (sim.t < node.forcing.until) return;
+      const d = node.forcing.door;
+      node.forcing = null;
+      sim.blocked.delete(d);
+      writeEnv(node.rep, `door:${d}`, node.id, { door: d, blocked: false }, sim.t);
+      say(`${node.label} has forced the doorway open`, 'ok');
+    }
     const had = node.path.length > 0;
     advance(node, dt, {
       gate: (wp) => {
+        // On the way to a downed teammate, a collapsed doorway is forced open.
+        if (sim.blocked.has(wp.door) && node.mission && byId[node.mission].status === 'mayday') {
+          writeEnv(node.rep, `door:${wp.door}`, node.id, { door: wp.door, blocked: true }, sim.t);
+          node.forcing = { door: wp.door, until: sim.t + FORCE_SECONDS };
+          say(`${node.label} is forcing the collapsed doorway to reach ${byId[node.mission].label}`, 'act');
+          return false; // stays at the doorway, path kept
+        }
         // What the firefighter finds at the doorway is the truth, and it goes
         // straight into the shared record for everyone else.
         if (sim.blocked.has(wp.door)) {

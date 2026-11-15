@@ -242,8 +242,8 @@ Show the measured results (`docs/evaluation.md`, or the last card of the video):
 |---|---|
 | Creativity and innovation | The orchestra framing; a technique from collaborative editing applied to a burning building; a photo of a drawing becoming the system's map; voices arranged for feeling |
 | Technical competence and execution | Copies that merge in any order, with no shared clock; a fire that spreads and burns sensors; a live interruptible voice agent; Gemini outputs checked against the data |
-| Research and learning | 100 measured fires; the rules that measuring forced (flashover 57 → 0, searches 1,082 → 571); what is still weak, said out loud |
-| Polish and completion | Works end to end on a phone and a laptop, live on the web; recorded video; 53 tests |
+| Research and learning | 100 measured fires; the rules that measuring forced (flashover 57 → 0, searches 1,082 → 562); what is still weak, said out loud |
+| Polish and completion | Works end to end on a phone and a laptop, live on the web; recorded video; 74 tests |
 
 **Why existing tools fall short** (have this ready if they ask about impact):
 
@@ -344,7 +344,7 @@ The commander still **orders**: they can override, redirect and pull crews out. 
 **Accuracy and safety**
 
 **Q: How often does it get it wrong?**
-A: Across 100 simulated fires with more than half the sensors destroyed, an occupied room was shown as confirmed empty in 0.353% of checks. At the end of a run, no room was ever wrongly shown empty on the command post (0 of 100). It errs the safe way: an empty room shown as occupied 5.9% of the time, and an occupied room shown as *unknown* 3.57% of the time. These are simulation figures with assumed sensor error rates, not real-world measurements.
+A: Across 100 simulated fires with more than half the sensors destroyed, an occupied room was shown as confirmed empty in 0.353% of checks. At the end of a run, no room was ever wrongly shown empty on the command post (0 of 100). It errs the safe way: an empty room shown as occupied 5.9% of the time, and an occupied room shown as *unknown* 3.54% of the time. These are simulation figures with assumed sensor error rates, not real-world measurements.
 
 **Q: Where does the remaining 0.35% come from?**
 A: Almost all of it is stale information across a cut link: a node on the far side still holds a recent "empty" for a room someone has just walked into. We cap how long "empty" is trusted, so after a few seconds the room turns unknown by itself.
@@ -367,10 +367,10 @@ A: Each piece of information has one owner, which is the only device that can wr
 A: We do not need them. Each record carries how old it is, not a timestamp, and the age grows as the record is passed on.
 
 **Q: How do firefighters avoid searching the same room?**
-A: Each firefighter runs the same rules on its own copy, so they reach the same assignment. Each also publishes a claim ("I'm going to Lab 2"), which the others respect. It is not perfect: while the radio is cut, 29.6% of searches repeat a room someone searched in the last 45 seconds, because two firefighters cannot hear each other's reports. Our measurements found that, and it is on our list.
+A: Each firefighter runs the same rules on its own copy, so they reach the same assignment. Each also publishes a claim ("I'm going to Lab 2"), which the others respect. It is not perfect: while the radio is cut, 27.8% of searches repeat a room someone searched in the last 45 seconds, because two firefighters cannot hear each other's reports. Our measurements found that, and it is on our list.
 
 **Q: How fast do they agree again after a link comes back?**
-A: In the fire runs, a mean of 11.1 seconds, worst case 52.7 seconds. In runs without fire, a mean of 5.4 seconds.
+A: In the fire runs, a mean of 10.5 seconds, worst case 52.7 seconds. In runs without fire, a mean of 5.4 seconds.
 
 **Q: How do you route around the fire?**
 A: The building is a graph of rooms joined by doors. We search it for the shortest route that avoids rooms believed to be on fire and doors reported impassable, using each firefighter's own copy. (A breadth-first search over doors, not A*.)
@@ -433,7 +433,7 @@ A: Real sensors and cameras as nodes; device-to-device radio instead of the rela
 ## 6. Things not to say
 
 - **Do not repeat the current `DEVPOST.md` draft's numbers or methods.** These are not supported by the code or the measurements:
-  - "duplicate searches 2.1% vs 34%" (measured: 29.6% repeated);
+  - "duplicate searches 2.1% vs 34%" (measured: 27.8% repeated);
   - "median clearance 4:12 vs 7:48";
   - "zero missed victims with ≥2 door cameras";
   - A* routing (it is breadth-first);

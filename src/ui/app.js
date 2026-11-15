@@ -172,13 +172,24 @@ function announceSim() {
     let m;
     if ((m = e.text.match(/^MAYDAY\. (Responder \d+) is down/))) {
       const id = sim.nodes.find((n) => n.label === m[1])?.id;
-      notice(`Mayday: ${id} is down`, 'Watch the <b>nearest free teammate</b>: nobody assigns the rescue, they break off on their own.', { at: id && nodeAt(id, 34) });
+      const trappedBy = /trapped/.test(e.text);
+      notice(
+        trappedBy ? `Mayday: ${id} is trapped` : `Mayday: ${id} is down`,
+        trappedBy ? 'The doorway collapsed and there is no other way out. Watch the <b>nearest free teammate</b> come and force it open.' : 'Watch the <b>nearest free teammate</b>: nobody assigns the rescue, they break off on their own.',
+        { at: id && nodeAt(id, 34) },
+      );
     } else if ((m = e.text.match(/^(Responder \d+) breaks off to reach (Responder \d+)/))) {
       const id = sim.nodes.find((n) => n.label === m[1])?.id;
       notice(`${id} breaks off to help`, `It saw the mayday in its own copy. Watch it walk to ${m[2].replace('Responder ', 'R')}.`, { tone: 'go', at: id && nodeAt(id, 30) });
     } else if ((m = e.text.match(/^(Responder \d+) has reached (Responder \d+)/))) {
       const id = sim.nodes.find((n) => n.label === m[1])?.id;
       notice(`${id} has ${m[2].replace('Responder ', 'R')}`, 'They come out <b>together</b>, at the casualty\'s pace, all the way to the assembly point.', { tone: 'go', at: id && nodeAt(id, 36) });
+    } else if ((m = e.text.match(/^(Responder \d+) is forcing the collapsed doorway to reach (Responder \d+)/))) {
+      const id = sim.nodes.find((n) => n.label === m[1])?.id;
+      notice(`${id} forces the collapsed doorway`, `The only way to ${m[2].replace('Responder ', 'R')} is blocked. Forcing it open takes about 10 seconds; then it is open for everyone.`, { tone: 'hazard', at: id && nodeAt(id, 30), seconds: 10 });
+    } else if ((m = e.text.match(/^(Responder \d+) has a way out again/))) {
+      const id = sim.nodes.find((n) => n.label === m[1])?.id;
+      notice(`${id} has a way out again`, 'The doorway was forced open. They heard it in their own copy and are walking out.', { tone: 'go', at: id && nodeAt(id, 30) });
     } else if ((m = e.text.match(/^Flashover in (.+?)\./))) {
       const id = ROOM_IDS.find((r) => ROOMS[r].name === m[1]);
       notice(`Flashover in ${m[1]}`, 'The whole room ignites and its doors are lost. Sensors in it die; the room turns <b>unknown</b>, never empty.', { at: id && roomAt(id) });

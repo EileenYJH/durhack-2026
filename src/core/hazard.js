@@ -47,9 +47,17 @@ export function buildingHazard(rep, roomIds, now) {
 }
 
 // Doors this node has been told are impassable.
+// A doorway is believed blocked if the newest report about it says so: one
+// that was forced open again is reported open, and that report wins.
 export function blockedDoors(rep) {
+  const newest = new Map();
+  for (const rec of Object.values(rep.env ?? {})) {
+    if (!rec.door) continue;
+    const prev = newest.get(rec.door);
+    if (!prev || rec.at > prev.at) newest.set(rec.door, rec);
+  }
   const out = new Set();
-  for (const rec of Object.values(rep.env ?? {})) if (rec.door && rec.blocked) out.add(rec.door);
+  for (const [door, rec] of newest) if (rec.blocked) out.add(door);
   return out;
 }
 

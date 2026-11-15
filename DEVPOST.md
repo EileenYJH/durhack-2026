@@ -71,21 +71,21 @@ On a fireground, **how** something is said matters as much as what is said. A fr
 | Measure | Result |
 |---|---|
 | Occupied room shown as confirmed empty (the unsafe error) | **0.353%** of 469,196 checks |
-| Occupied room shown as unknown (the honest answer) | 3.57% |
+| Occupied room shown as unknown (the honest answer) | 3.54% |
 | Empty room shown as occupied (the safe error) | 5.9% |
 | Rooms wrongly empty on the command post at the end of a run | **0 of 100** |
 | Sensors destroyed by the end of a run | 56.8% |
-| Agreement after the link returns | mean 11.1 s, worst 52.7 s |
+| Agreement after the link returns | mean 10.5 s, worst 52.7 s |
 
 **What measuring made me fix:**
 
 | Problem found | Before | After |
 |---|---|---|
 | Firefighters caught in a flashover | 57 in 100 runs | 0, after adding "leave while the way out is still below 240°C" |
-| Searches in total | 1,082 | 571 |
+| Searches in total | 1,082 | 562 |
 | Unsafe "empty" (runs without fire) | 1.008% | 0.284%, after making "empty" outlast the last sighting and trusting it for 6 s instead of 22 s |
 
-**Still weak, and said so:** 29.6% of searches repeat a room another firefighter searched in the last 45 seconds, mostly while the radio is cut or jammed. The fire and survival figures come from simple rules chosen to look plausible, not from a validated fire model, and the sensor error rates are assumptions. Full method and results: `docs/evaluation.md`. There are 53 automated tests (`npm test`).
+**Still weak, and said so:** 27.8% of searches repeat a room another firefighter searched in the last 45 seconds, mostly while the radio is cut or jammed. The fire and survival figures come from simple rules chosen to look plausible, not from a validated fire model, and the sensor error rates are assumptions. Full method and results: `docs/evaluation.md`. There are 74 automated tests (`npm test`).
 
 ## Challenges I ran into
 

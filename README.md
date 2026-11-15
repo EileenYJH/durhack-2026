@@ -23,7 +23,7 @@ At a building fire, the incident commander keeps deciding whether to send crews 
 | Occupied room shown as confirmed empty | 0.353% of 469,196 checks |
 | Rooms wrongly empty at the end of a run | 0 of 100 |
 | Sensors destroyed by the end | 56.8% |
-| Agreement after the link returns | mean 11.1 s |
+| Agreement after the link returns | mean 10.5 s |
 
 Simulation figures with assumed sensor error rates. This is a decision-support prototype, not a certified life-safety system.
 
@@ -49,7 +49,7 @@ node server.js
 | http://localhost:8200/editor.html | The building editor: draw rooms, doors and exits, or import a photo of a floor plan (needs Gemini). **Use this building** makes every page use your layout. |
 | `firefighter.html` | The firefighter phone. On the board press **Firefighter phones** and scan the code. Both devices must use the hosted HTTPS address, and the microphone for **Talk to Command** also needs HTTPS. |
 
-Tests: `npm test` (53 tests). Safety measurement: `node scripts/evaluate.js 100`.
+Tests: `npm test` (74 tests). Safety measurement: `node scripts/evaluate.js 100`.
 
 Optional keys go in `.env` (copy `.env.example`):
 - **Gemini** (see below) for the layout import, the written brief and the route wording.
