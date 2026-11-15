@@ -581,11 +581,26 @@ export function createSim(seed = 7) {
 
     const skip = new Set(Object.keys(node.refused).filter((r) => sim.t - node.refused[r] < 30));
     for (const p of peers) if (p.manual && p.target && p.age < CLAIM_TTL) skip.add(p.target);
+    // Every firefighter works out the whole team's plan from its own copy, but
+    // copies can differ a little (where a teammate was last heard, for one), so
+    // two plans can send two people to the same room. Each firefighter also
+    // broadcasts the room it is heading for: a room a teammate has already
+    // claimed, and is nearer to, is theirs (the lower number wins a tie).
+    const far = (who, r) => routeLength({ x: who.x, y: who.y }, who.room, r, avoid, blocked);
+    const theirs = (r) => {
+      const mine = far(node, r);
+      return peers.some((p) => p.target === r && p.status === 'ok' && p.age < CLAIM_TTL && !p.manual && (far(p, r) < mine || (far(p, r) === mine && p.id < node.id)));
+    };
     let target = assign(belief, team, { hazards, blocked, skip })[node.id];
-    // Keep going to the current room unless it no longer needs a search or
-    // something more urgent has come up. Stops responders dithering.
+    for (let k = 0; k < 4 && target && theirs(target); k++) {
+      skip.add(target);
+      target = assign(belief, team, { hazards, blocked, skip })[node.id];
+    }
+    // Keep going to the current room unless it no longer needs a search, a
+    // teammate has the better claim, or something more urgent has come up.
+    // Stops responders dithering.
     const u = (id) => urgency(belief[id], hazards[id]);
-    if (node.target && target && !skip.has(node.target) && u(node.target) > 0 && u(target) <= u(node.target)) target = node.target;
+    if (node.target && target && !skip.has(node.target) && !theirs(node.target) && u(node.target) > 0 && u(target) <= u(node.target)) target = node.target;
     if (target !== node.target) {
       node.target = target;
       if (target) {

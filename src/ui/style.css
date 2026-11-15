@@ -448,7 +448,10 @@ body.ff.mayday .ff-top { background: #3a0b12; }
 /* ---- demo guide ---- */
 .guide-open { border-color: var(--hazard); }
 .guide-open[aria-expanded="true"] { background: var(--hazard); color: #14202b; }
-.guide-panel { position: fixed; right: 18px; bottom: 18px; z-index: 50; width: min(440px, calc(100vw - 32px)); max-height: calc(100vh - 36px); overflow: auto; background: var(--sheet); color: var(--ink); border: 2px solid var(--ink); border-top: 10px solid var(--hazard); box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35); padding: 14px 18px 14px; }
+.guide-panel { position: fixed; right: 0; top: 0; bottom: 0; z-index: 50; width: 400px; overflow: auto; background: var(--sheet); color: var(--ink); border-left: 10px solid var(--hazard); box-shadow: -8px 0 30px rgba(0, 0, 0, 0.3); padding: 16px 18px; display: flex; flex-direction: column; }
+/* the board makes room for the guide instead of hiding under it */
+body.guiding { padding-right: 400px; }
+.guide-panel .guide-nav { margin-top: auto; padding-top: 12px; }
 .guide-head { display: flex; align-items: center; gap: 10px; }
 .guide-label { font-family: var(--display); font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); font-size: 14px; }
 .guide-count { font-family: var(--mono); font-size: 13px; color: var(--muted); }
@@ -461,8 +464,10 @@ body.ff.mayday .ff-top { background: #3a0b12; }
 .guide-status { min-height: 1.3em; margin: 8px 0 0; font-size: 14px; color: var(--muted); }
 .guide-nav { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 8px; }
 .guide-keys { font-size: 12px; color: var(--muted); text-align: center; }
-@media (max-width: 700px) { .guide-panel { left: 16px; right: 16px; width: auto; bottom: 16px; } .guide-keys { display: none; } }
+@media (max-width: 900px) { body.guiding { padding-right: 0; padding-bottom: 46vh; } .guide-panel { top: auto; left: 0; width: auto; height: 46vh; border-left: 0; border-top: 10px solid var(--hazard); } .guide-keys { display: none; } }
 
 /* ---- push to talk on the firefighter phone ---- */
 .ff-ptt { font: 700 24px/1 var(--display); letter-spacing: 0.08em; text-transform: uppercase; padding: 30px 12px; background: #172128; color: #e4eae7; border: 3px solid #e4eae7; touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
 .ff-ptt.on { background: #f2bd2b; border-color: #f2bd2b; color: #0f161b; box-shadow: 0 0 0 6px rgba(242, 189, 43, 0.35); }
+/* while guiding, the plan gets the full width; the panels follow below it */
+body.guiding main { grid-template-columns: minmax(0, 1fr); grid-template-areas: "plan" "board" "metrics" "matrix" "log"; }

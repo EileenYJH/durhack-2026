@@ -40,27 +40,28 @@ The simulation now has heat and smoke that spread through doorways, sensors that
 
 | Measure | Result |
 |---|---|
-| Occupied room shown as confirmed empty (unsafe) | 0.353% of 469,196 checks |
-| Occupied room shown as unknown | 3.54% |
-| Empty room shown as occupied | 5.9% |
+| Occupied room shown as confirmed empty (unsafe) | 0.361% of 464,409 checks |
+| Occupied room shown as unknown | 3.60% |
+| Empty room shown as occupied | 6.0% |
 | Rooms wrongly empty on the command post at the end | 0 in 100 runs |
 | Sensors destroyed by the end of a run | 56.8% |
-| Agreement after the link returns | mean 10.5 s, worst 52.7 s |
-| People out | 1,181 of 1,300 (90.8%); 119 lost to the fire |
+| Agreement after the link returns | mean 11.9 s, worst 53.6 s |
+| People out | 1,180 of 1,300 (90.8%); 120 lost to the fire |
 
 So with more than half the sensors burnt out, the unsafe rate stayed close to the 0.28% measured without fire. Two rules do that work: a sensor blinded by smoke says nothing instead of saying "empty", and a sensor that goes silent while reading hot is presumed burnt.
 
-Re-measured on 15 November 2026 after firefighters were made to rescue each other properly (walk to the casualty, escort them out, force a collapsed doorway, call a mayday at once when trapped). The safety figures did not move; agreement after the link returns went from a mean of 11.1 s to 10.5 s, and repeated searches from 29.6% to 27.8%. The trapped-firefighter rescue is covered by `test/break-it.test.js`, not by this measurement, because these runs never collapse a doorway on a firefighter.
+Re-measured on 15 November 2026 (twice: the table above is the latest) after firefighters were made to rescue each other properly (walk to the casualty, escort them out, force a collapsed doorway, call a mayday at once when trapped). The safety figures did not move; agreement after the link returns went from a mean of 11.1 s to 10.5 s, and repeated searches from 29.6% to 27.8%. The trapped-firefighter rescue is covered by `test/break-it.test.js`, not by this measurement, because these runs never collapse a doorway on a firefighter.
 
 ### What the measurement made us fix
 
 | Problem found | Before | After |
 |---|---|---|
 | Firefighters caught in a flashover | 57 in 100 runs | 0, after adding "leave while the way out is still below 240°C" |
-| Searches in total | 1,082 | 562, after a cleared room stays cleared while its door counters show nobody has entered, and a room a teammate has just attended is left alone |
+| Searches in total | 1,082 | 488, after a cleared room stays cleared while its door counters show nobody has entered, and a room a teammate has just attended is left alone |
+| Searches repeating a room within 45 s | 27.8% | 15.8%, after each firefighter leaves a room to a teammate who has already claimed it (the claim is in the status every firefighter broadcasts) and is nearer |
 
 ### Still weak
 
-- 27.8% of searches repeat a room another firefighter searched in the last 45 s. Most happen while radio is cut or jammed, when two firefighters cannot hear each other's reports.
+- 15.8% of searches repeat a room another firefighter searched in the last 45 s (27.8% before the claim rule). Most happen while radio is cut or jammed, when two firefighters cannot hear each other's reports.
 - With no flashover deaths there were no maydays in these runs, so the mayday response is covered only by a test and by hand, not by this measurement.
 - Fire, smoke and survival figures are simple rules chosen to look plausible. They are not a validated fire model, and the 90.8% is a property of this simulation, not a prediction.

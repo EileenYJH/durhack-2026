@@ -20,10 +20,10 @@ At a building fire, the incident commander keeps deciding whether to send crews 
 
 | Measured over 100 simulated fires ([details](docs/evaluation.md)) | |
 |---|---|
-| Occupied room shown as confirmed empty | 0.353% of 469,196 checks |
+| Occupied room shown as confirmed empty | 0.361% of 464,409 checks |
 | Rooms wrongly empty at the end of a run | 0 of 100 |
 | Sensors destroyed by the end | 56.8% |
-| Agreement after the link returns | mean 10.5 s |
+| Agreement after the link returns | mean 11.9 s |
 
 Simulation figures with assumed sensor error rates. This is a decision-support prototype, not a certified life-safety system.
 

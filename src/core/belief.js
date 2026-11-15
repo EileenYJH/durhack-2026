@@ -172,7 +172,7 @@ export function roomBelief(rep, roomId, now, P = PARAMS) {
       count: 0,
       age: clear.age,
       conf: Math.round(100 * (clear.conf ?? 0.9) * trust * decay(doors.age, E)),
-      why: `${who(clear.writer)} and doors agree`,
+      why: clear.age > P.EMPTY_FRESH ? `${who(clear.writer)} saw nobody ${Math.round(clear.age)} s ago; nothing newer` : `${who(clear.writer)} and doors agree`,
     };
   }
 

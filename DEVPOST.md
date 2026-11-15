@@ -20,7 +20,7 @@ I asked: what if every sensor and every firefighter kept **its own copy of the p
 
 - **Photo → building.** Upload a photo of the fire evacuation plan from the wall. Gemini reads the rooms and doors; ARIA repairs the gaps (snaps walls, adds missing doors, exits and corridors), lists every repair, and keeps the photo underneath so a person can check every wall. The building cannot be used until it passes the checks.
 - **Every node keeps its own picture.** Door counters, room sensors, firefighters and the command post each hold a copy of the shared state and work out, for every room, one of: occupied and still, occupied, possibly occupied, **unknown**, or confirmed empty. Each state comes with the reason and how fresh it is.
-- **Nobody hands out rooms.** Each firefighter works out the whole team's assignment from its own copy (rooms by urgency, teammates by the position each broadcasts, taking turns in a fixed order R1, R2, R3) and follows its own part. Same rules on the same data give the same answer on every device, so they split the rooms without a radio call.
+- **Nobody hands out rooms.** Each firefighter works out the whole team's assignment from its own copy (rooms by urgency, teammates by the position each broadcasts, taking turns in a fixed order R1, R2, R3) and follows its own part. Each also broadcasts the room it is heading for, and leaves a room to a teammate who has already claimed it and is nearer. Same rules on the same data give the same answer on every device, so they split the rooms without a radio call.
 - **It keeps working when things break.** Cut the radio between two wings, jam all radio, collapse a doorway, kill a sensor, start a second fire: every node keeps deciding from what it last heard. A room nobody can hear from turns **unknown, never empty**. When the link comes back, the copies agree again.
 - **A fire that fights back.** Heat and smoke spread through doorways; sensors fail in the heat; smoke blinds cameras and weakens radio; rooms flash over; people collapse; firefighters run on limited air and pull out while their way out is still below 240°C.
 - **Crews look after each other.** When a firefighter calls a mayday, the nearest free teammate sees it in its own copy, breaks off, walks to them and brings them out together. No commander has to assign the rescue.
@@ -70,22 +70,23 @@ On a fireground, **how** something is said matters as much as what is said. A fr
 
 | Measure | Result |
 |---|---|
-| Occupied room shown as confirmed empty (the unsafe error) | **0.353%** of 469,196 checks |
-| Occupied room shown as unknown (the honest answer) | 3.54% |
-| Empty room shown as occupied (the safe error) | 5.9% |
+| Occupied room shown as confirmed empty (the unsafe error) | **0.361%** of 464,409 checks |
+| Occupied room shown as unknown (the honest answer) | 3.60% |
+| Empty room shown as occupied (the safe error) | 6.0% |
 | Rooms wrongly empty on the command post at the end of a run | **0 of 100** |
 | Sensors destroyed by the end of a run | 56.8% |
-| Agreement after the link returns | mean 10.5 s, worst 52.7 s |
+| Agreement after the link returns | mean 11.9 s, worst 53.6 s |
 
 **What measuring made me fix:**
 
 | Problem found | Before | After |
 |---|---|---|
 | Firefighters caught in a flashover | 57 in 100 runs | 0, after adding "leave while the way out is still below 240°C" |
-| Searches in total | 1,082 | 562 |
+| Searches in total | 1,082 | 488 |
+| Searches repeating a room within 45 s | 27.8% | 15.8%, after each firefighter leaves a room to a teammate who has already claimed it and is nearer |
 | Unsafe "empty" (runs without fire) | 1.008% | 0.284%, after making "empty" outlast the last sighting and trusting it for 6 s instead of 22 s |
 
-**Still weak, and said so:** 27.8% of searches repeat a room another firefighter searched in the last 45 seconds, mostly while the radio is cut or jammed. The fire and survival figures come from simple rules chosen to look plausible, not from a validated fire model, and the sensor error rates are assumptions. Full method and results: `docs/evaluation.md`. There are 74 automated tests (`npm test`).
+**Still weak, and said so:** 15.8% of searches repeat a room another firefighter searched in the last 45 seconds, mostly while the radio is cut or jammed. The fire and survival figures come from simple rules chosen to look plausible, not from a validated fire model, and the sensor error rates are assumptions. Full method and results: `docs/evaluation.md`. There are 74 automated tests (`npm test`).
 
 ## Challenges I ran into
 

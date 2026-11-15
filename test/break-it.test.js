@@ -219,3 +219,23 @@ for (const [where, layout] of BUILDINGS) {
     assert.ok(heatAfter(4) > heatAfter(1) * 1.2, 'fire at 4x heats the building more than at 1x');
   });
 }
+
+for (const [where, layout] of BUILDINGS) {
+  test(`[${where}] Kill the sensor of an empty room: it stops showing empty within seconds`, (t) => {
+    setBuilding(layout);
+    t.after(() => setBuilding(DEFAULT_LAYOUT));
+    const sim = started(3);
+    const post = () => buildingBelief(sim.node('POST').rep, sim.t);
+    let sensor = null;
+    for (let i = 0; i < 60 && !sensor; i++) {
+      run(sim, 1);
+      sensor = sim.nodes.find((n) => n.kind === 'room' && n.alive && !isHall(n.room) && post()[n.room].state === 'empty' && !/Searched/.test(post()[n.room].why) && !sim.people.some((p) => p.room === n.room));
+    }
+    assert.ok(sensor, 'a room believed empty from its sensor');
+    sim.toggleNode(sensor.id);
+    run(sim, 7);
+    const b = post()[sensor.room];
+    // only a firefighter's search may still call it empty
+    assert.ok(b.state !== 'empty' || /Searched/.test(b.why), `${sensor.room} still shown empty 7 s after its sensor died (${b.why})`);
+  });
+}

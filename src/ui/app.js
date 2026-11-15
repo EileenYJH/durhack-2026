@@ -133,26 +133,33 @@ function detourMarkup() {
 let focus = null; // { until, tone, at: { x, y, r } | { rect } }
 let eventTimer = 0;
 // Something the presenter did keeps the banner for a few seconds; what the
-// incident does by itself in that time waits its turn (it is in the event strip
-// under the plan anyway), and the latest of those is shown once the time is up.
-let userHeldUntil = 0;
-let pendingSim = null;
-let pendingTimer = 0;
+// incident does by itself in that time waits its turn, and queued banners then
+// take turns, each up for at least 3 s, so none is lost (a mayday, say). They
+// are also in the event strip under the plan.
+let holdUntil = 0;
+const queue = [];
+let pumpTimer = 0;
+function pump() {
+  clearTimeout(pumpTimer);
+  if (!queue.length) return;
+  const wait = holdUntil - performance.now();
+  if (wait > 0) {
+    pumpTimer = setTimeout(pump, wait);
+    return;
+  }
+  showNotice(...queue.shift());
+  holdUntil = performance.now() + 3000;
+  if (queue.length) pumpTimer = setTimeout(pump, 3000);
+}
 function simNotice(...args) {
-  const wait = userHeldUntil - performance.now();
-  if (wait <= 0) return showNotice(...args);
-  pendingSim = args;
-  clearTimeout(pendingTimer);
-  pendingTimer = setTimeout(() => {
-    if (pendingSim) showNotice(...pendingSim);
-    pendingSim = null;
-  }, wait);
+  queue.push(args);
+  if (queue.length > 4) queue.shift(); // keep up with the fire: drop the oldest
+  pump();
 }
 function notice(...args) {
-  userHeldUntil = performance.now() + 4000;
-  pendingSim = null;
-  clearTimeout(pendingTimer);
   showNotice(...args);
+  holdUntil = performance.now() + 4000;
+  pump(); // anything queued follows after the hold
 }
 function showNotice(title, watch, { tone = 'fire', at = null, seconds = 7 } = {}) {
   const box = $('event');
@@ -372,11 +379,12 @@ $('fire-speed').addEventListener('click', (e) => {
   e.currentTarget.textContent = `Fire speed ${next}x`;
   notice(`Fire now spreads at ${next}x`, next > 1 ? 'Every second changes the right decision. Watch sensors die and crews pull out sooner.' : 'Back to normal speed.', { tone: next > 1 ? 'fire' : 'go', seconds: 4 });
 });
-$('pause').addEventListener('click', (e) => {
-  paused = !paused;
-  e.currentTarget.setAttribute('aria-pressed', String(paused));
-  e.currentTarget.textContent = paused ? 'Resume' : 'Pause';
-});
+function setPaused(on) {
+  paused = on;
+  $('pause').setAttribute('aria-pressed', String(paused));
+  $('pause').textContent = paused ? 'Resume' : 'Pause';
+}
+$('pause').addEventListener('click', () => setPaused(!paused));
 $('speed').addEventListener('click', (e) => {
   speed = speed === 1 ? 2 : speed === 2 ? 4 : 1;
   e.currentTarget.textContent = `Speed ${speed}x`;
@@ -392,8 +400,9 @@ $('reset').addEventListener('click', () => {
   lastReconverge = null;
   focus = null;
   detour = null;
-  pendingSim = null;
-  clearTimeout(pendingTimer);
+  queue.length = 0;
+  clearTimeout(pumpTimer);
+  holdUntil = 0;
   $('event').hidden = true;
   drawPanels();
 });
@@ -491,7 +500,16 @@ function act(what, target) {
     const n = sim.node(id);
     const room = n.kind === 'room' ? ROOMS[n.room].name : null;
     if (n.alive) notice(`${n.label} back on`, 'It starts reporting again, and its room fills back in.', { tone: 'go', at: nodeAt(id, 24) });
-    else notice(`Sensor killed: ${n.label}`, room ? `Watch <b>${room}</b>: with no fresh reading it turns <b>unknown</b> within seconds, never "empty".` : 'This doorway stops counting. The rooms on each side lose their count and turn <b>unknown</b> unless another sensor or a firefighter sees them.', { at: nodeAt(id, 24) });
+    else {
+      // Say what will really happen to this room, from what the command post believes now.
+      const b = n.kind === 'room' ? buildingBelief(sim.node('POST').rep, sim.t)[n.room] : null;
+      let watch;
+      if (!room) watch = 'This doorway stops counting. The rooms on each side lose their count and turn <b>unknown</b> unless another sensor or a firefighter sees them.';
+      else if (['still', 'occupied', 'possible'].includes(b.state)) watch = `Watch <b>${room}</b>: it was believed occupied. With the sensor gone it becomes <b>possibly occupied</b>, then unknown, and is <b>never shown as empty</b> unless a firefighter searches it.`;
+      else if (b.state === 'empty') watch = `Watch <b>${room}</b>: its sensor last saw nobody. That reading is trusted for only a few seconds; with nothing newer the room turns <b>unknown</b>, not empty.`;
+      else watch = `Watch <b>${room}</b>: with no fresh reading it stays <b>unknown</b>.`;
+      notice(`Sensor killed: ${n.label}`, watch, { at: nodeAt(id, 24), seconds: 9 });
+    }
   } else if (what === 'mayday') {
     const id = target;
     const n = sim.node(id);
@@ -533,25 +551,32 @@ map.addEventListener('keydown', (e) => {
 drawStatic(map);
 setMode('inspect');
 drawPanels();
+// The incident runs on its own clock, at real speed whatever the frame rate:
+// a slow or busy screen draws less often, it does not slow the fire down.
+// (A pause longer than a second, such as a hidden tab, is not caught up.)
 let last = performance.now();
 let owed = 0;
 let panelAt = 0;
-function frame(now) {
-  const dt = Math.min(0.1, (now - last) / 1000);
+function advance() {
+  const now = performance.now();
+  const dt = Math.min(1, (now - last) / 1000);
   last = now;
-  if (!paused) {
-    owed += dt * speed;
-    let steps = 0;
-    while (owed >= 0.1 && steps++ < 12) {
-      sim.step(0.1);
-      owed -= 0.1;
-    }
+  if (paused) return;
+  owed += dt * speed;
+  let steps = 0;
+  while (owed >= 0.1 && steps++ < 50) {
+    sim.step(0.1);
+    owed -= 0.1;
   }
-  drawLive();
   if (now - panelAt > 250) {
     panelAt = now;
     drawPanels();
   }
+}
+setInterval(advance, 50);
+function frame() {
+  advance();
+  drawLive();
   requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);
@@ -744,6 +769,9 @@ const guide = createGuide({
     drawPanels();
   },
   detourPath,
+  setPaused,
+  isPaused: () => paused,
+  beliefOf: (id) => buildingBelief(sim.node(id).rep, sim.t),
   $,
 });
 

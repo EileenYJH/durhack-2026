@@ -245,7 +245,7 @@ Show the measured results (`docs/evaluation.md`, or the last card of the video):
 |---|---|
 | Creativity and innovation | The orchestra framing; a technique from collaborative editing applied to a burning building; a photo of a drawing becoming the system's map; voices arranged for feeling |
 | Technical competence and execution | Copies that merge in any order, with no shared clock; a fire that spreads and burns sensors; a live interruptible voice agent; Gemini outputs checked against the data |
-| Research and learning | 100 measured fires; the rules that measuring forced (flashover 57 → 0, searches 1,082 → 562); what is still weak, said out loud |
+| Research and learning | 100 measured fires; the rules that measuring forced (flashover 57 → 0, searches 1,082 → 488, repeated searches 27.8% → 15.8%); what is still weak, said out loud |
 | Polish and completion | Works end to end on a phone and a laptop, live on the web; recorded video; 74 tests |
 
 **Why existing tools fall short** (have this ready if they ask about impact):
@@ -348,9 +348,9 @@ The commander still **orders**: they can override, redirect and pull crews out. 
 **Accuracy and safety**
 
 **Q: How often does it get it wrong?**
-A: Across 100 simulated fires with more than half the sensors destroyed, an occupied room was shown as confirmed empty in 0.353% of checks. At the end of a run, no room was ever wrongly shown empty on the command post (0 of 100). It errs the safe way: an empty room shown as occupied 5.9% of the time, and an occupied room shown as *unknown* 3.54% of the time. These are simulation figures with assumed sensor error rates, not real-world measurements.
+A: Across 100 simulated fires with more than half the sensors destroyed, an occupied room was shown as confirmed empty in 0.361% of checks. At the end of a run, no room was ever wrongly shown empty on the command post (0 of 100). It errs the safe way: an empty room shown as occupied 5.9% of the time, and an occupied room shown as *unknown* 3.54% of the time. These are simulation figures with assumed sensor error rates, not real-world measurements.
 
-**Q: Where does the remaining 0.35% come from?**
+**Q: Where does the remaining 0.36% come from?**
 A: Almost all of it is stale information across a cut link: a node on the far side still holds a recent "empty" for a room someone has just walked into. We cap how long "empty" is trusted, so after a few seconds the room turns unknown by itself.
 
 **Q: What if every sensor in a room burns?**
@@ -371,10 +371,10 @@ A: Each piece of information has one owner, which is the only device that can wr
 A: We do not need them. Each record carries how old it is, not a timestamp, and the age grows as the record is passed on.
 
 **Q: How do firefighters avoid searching the same room?**
-A: Each firefighter works out the **whole team's** assignment, not just its own: every room gets an urgency score from its own copy, then R1, R2 and R3 take turns in that fixed order, each taking the room with the best urgency minus distance that nobody before it has taken. Teammates' positions come from the status each one broadcasts every second. Same rules on the same data give the same table on every device, and each firefighter follows its own row. A room someone has just searched drops to zero urgency, and a firefighter keeps its current room unless something more urgent comes up. It is not perfect: when a cut or a jam makes the copies differ, two firefighters can pick the same room. 27.8% of searches repeat a room searched in the last 45 seconds, mostly during cuts and jams. The error is the safe one: a room searched twice, never a room nobody searches.
+A: Each firefighter works out the **whole team's** assignment, not just its own: every room gets an urgency score from its own copy, then R1, R2 and R3 take turns in that fixed order, each taking the room with the best urgency minus distance that nobody before it has taken. Teammates' positions come from the status each one broadcasts every second. Same rules on the same data give the same table on every device, and each firefighter follows its own row. Each firefighter also broadcasts the room it is heading for: if a teammate has already claimed a room and is nearer to it, the room is theirs and you take your next best. A room someone has just searched drops to zero urgency, and a firefighter keeps its current room unless something more urgent comes up. It is not perfect: when a cut or a jam makes the copies differ, two firefighters can pick the same room. 15.8% of searches repeat a room searched in the last 45 seconds (27.8% before we added the claim rule below), mostly during cuts and jams. The error is the safe one: a room searched twice, never a room nobody searches.
 
 **Q: How fast do they agree again after a link comes back?**
-A: In the fire runs, a mean of 10.5 seconds, worst case 52.7 seconds. In runs without fire, a mean of 5.4 seconds.
+A: In the fire runs, a mean of 11.9 seconds, worst case 53.6 seconds. In runs without fire, a mean of 5.4 seconds.
 
 **Q: How do you route around the fire?**
 A: The building is a graph of rooms joined by doors. We search it for the shortest route that avoids rooms believed to be on fire and doors reported impassable, using each firefighter's own copy. (A breadth-first search over doors, not A*.)
@@ -437,7 +437,7 @@ A: Real sensors and cameras as nodes; device-to-device radio instead of the rela
 ## 6. Things not to say
 
 - **Do not repeat the current `DEVPOST.md` draft's numbers or methods.** These are not supported by the code or the measurements:
-  - "duplicate searches 2.1% vs 34%" (measured: 27.8% repeated);
+  - "duplicate searches 2.1% vs 34%" (measured: 15.8% repeated);
   - "median clearance 4:12 vs 7:48";
   - "zero missed victims with ≥2 door cameras";
   - A* routing (it is breadth-first);
