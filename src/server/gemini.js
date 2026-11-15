@@ -24,7 +24,9 @@ const SCOPE = 'https://www.googleapis.com/auth/cloud-platform';
 // visible answer is not cut off; the prompts themselves keep answers short.
 const REASONING_HEADROOM = 3000;
 
-export function createGemini(env = process.env, endpoints = {}, fetchImpl = fetch) {
+// When Google says "busy, try again" (429) or has a passing fault (500, 503),
+// wait and try again. retryDelays can be shortened in tests.
+export function createGemini(env = process.env, endpoints = {}, fetchImpl = fetch, retryDelays = [2500, 7000]) {
   const provider = (env.GEMINI_PROVIDER ?? 'aistudio').toLowerCase();
   const model = env.GEMINI_MODEL ?? 'gemini-3.5-flash';
   const project = env.GCP_PROJECT;
@@ -119,16 +121,19 @@ export function createGemini(env = process.env, endpoints = {}, fetchImpl = fetc
     if (provider === 'vertex') headers.authorization = `Bearer ${await accessToken()}`;
     else headers['x-goog-api-key'] = key;
 
-    const r = await fetchImpl(target().url, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({
-        systemInstruction: { parts: [{ text: system }] },
-        contents: [{ role: 'user', parts }],
-        generationConfig: { temperature, maxOutputTokens: maxTokens + REASONING_HEADROOM, ...(responseMimeType ? { responseMimeType } : {}) },
-      }),
-      signal: AbortSignal.timeout(45_000),
+    const body = JSON.stringify({
+      systemInstruction: { parts: [{ text: system }] },
+      contents: [{ role: 'user', parts }],
+      generationConfig: { temperature, maxOutputTokens: maxTokens + REASONING_HEADROOM, ...(responseMimeType ? { responseMimeType } : {}) },
     });
+    let r;
+    for (let attempt = 0; ; attempt++) {
+      r = await fetchImpl(target().url, { method: 'POST', headers, body, signal: AbortSignal.timeout(45_000) });
+      const passing = r.status === 429 || r.status === 500 || r.status === 503;
+      if (!passing || attempt >= retryDelays.length) break;
+      await r.text(); // let the connection go
+      await new Promise((done) => setTimeout(done, retryDelays[attempt]));
+    }
     if (!r.ok) {
       const label = provider.startsWith('vertex') ? 'Vertex AI' : 'Gemini';
       const detail = (await r.text()).replace(/\s+/g, ' ').slice(0, 240);

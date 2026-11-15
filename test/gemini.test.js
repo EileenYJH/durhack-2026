@@ -93,6 +93,25 @@ test('Vertex errors from Google are readable and short', async (t) => {
   await assert.rejects(gem.generate('s', [{ text: 'x' }]), /Vertex AI returned 403: .*has not been used/);
 });
 
+test('a busy answer from Google is retried, then reported if it persists', async () => {
+  let calls = 0;
+  const reply = (status, body) => ({ ok: status === 200, status, text: async () => JSON.stringify(body), json: async () => body });
+  const flaky = async () => (++calls < 3 ? reply(429, { error: { message: 'Resource exhausted' } }) : reply(200, { candidates: [{ content: { parts: [{ text: 'OK' }] } }] }));
+  const gem = createGemini({ GEMINI_API_KEY: 'k' }, {}, flaky, [1, 1]);
+  assert.equal(await gem.generate('s', [{ text: 'x' }]), 'OK');
+  assert.equal(calls, 3);
+
+  calls = 0;
+  const busy = async () => (++calls, reply(429, { error: { message: 'Resource exhausted' } }));
+  await assert.rejects(createGemini({ GEMINI_API_KEY: 'k' }, {}, busy, [1, 1]).generate('s', [{ text: 'x' }]), /returned 429/);
+  assert.equal(calls, 3, 'tried three times in all');
+
+  calls = 0;
+  const denied = async () => (++calls, reply(403, { error: { message: 'no' } }));
+  await assert.rejects(createGemini({ GEMINI_API_KEY: 'k' }, {}, denied, [1, 1]).generate('s', [{ text: 'x' }]), /returned 403/);
+  assert.equal(calls, 1, 'a refusal is not retried');
+});
+
 test('missing settings are reported before any request is made', () => {
   assert.match(createGemini({ GEMINI_PROVIDER: 'vertex' }).problem(), /GCP_PROJECT/);
   assert.match(createGemini({}).problem(), /GEMINI_API_KEY/);

@@ -321,13 +321,54 @@ $('import').addEventListener('change', async (e) => {
 });
 
 // ---- photo import ------------------------------------------------------------------
+// Turns any picture the browser can open into a JPEG no wider than `max`.
+// The quick decoder handles JPEG, PNG, WebP, GIF and BMP. SVG and some others
+// only open through an <img> element, so that is the second try. HEIC (the
+// iPhone default) and PDF cannot be opened by Chrome or Edge on Windows at all.
+function loadImage(file) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      resolve(img);
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error('undecodable'));
+    };
+    img.src = url;
+  });
+}
+
+function unreadable(file) {
+  const kind = (file.type || file.name.split('.').pop() || 'this').replace(/^image\//, '').toUpperCase();
+  if (/HEI[CF]/.test(kind) || /\.hei[cf]$/i.test(file.name)) return 'This is an HEIC photo (the iPhone default), which the browser cannot open. On the iPhone, set Camera > Formats > Most Compatible, or share the photo as JPEG, then try again.';
+  if (/PDF/.test(kind)) return 'This is a PDF. Take a screenshot of the plan, or export the page as PNG, then try again.';
+  return `The browser cannot open ${kind} files. Save the plan as JPEG, PNG or WebP and try again.`;
+}
+
 async function downscale(file, max = 1400) {
-  const bitmap = await createImageBitmap(file);
-  const k = Math.min(1, max / Math.max(bitmap.width, bitmap.height));
+  let source;
+  try {
+    source = await createImageBitmap(file);
+  } catch {
+    try {
+      source = await loadImage(file);
+    } catch {
+      throw new Error(unreadable(file));
+    }
+  }
+  const w = source.width || 1200;
+  const h = source.height || 800;
+  const k = Math.min(1, max / Math.max(w, h));
   const c = document.createElement('canvas');
-  c.width = Math.round(bitmap.width * k);
-  c.height = Math.round(bitmap.height * k);
-  c.getContext('2d').drawImage(bitmap, 0, 0, c.width, c.height);
+  c.width = Math.max(1, Math.round(w * k));
+  c.height = Math.max(1, Math.round(h * k));
+  const g = c.getContext('2d');
+  g.fillStyle = '#fff'; // transparent PNG and SVG plans would otherwise turn black
+  g.fillRect(0, 0, c.width, c.height);
+  g.drawImage(source, 0, 0, c.width, c.height);
   return c.toDataURL('image/jpeg', 0.85);
 }
 
@@ -349,7 +390,7 @@ $('photo').addEventListener('change', async (e) => {
       ? `Imported ${Object.keys(layout.rooms).length} rooms and ${Object.keys(layout.doors).length} doors. Compare it with the photo and fix anything wrong before you use it.`
       : `Imported, but it has problems (see Check). Fix them in the editor.`;
   } catch (err) {
-    status.textContent = `Could not read the plan: ${err.message}`;
+    status.textContent = err.message.startsWith('This ') || err.message.startsWith('The browser') ? err.message : `Could not read the plan: ${err.message}`;
   }
   e.target.value = '';
 });
