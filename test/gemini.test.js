@@ -81,6 +81,17 @@ test('Vertex with a service account: signed JWT, bearer token, project path, tok
   assert.equal(calls[0].headers['x-goog-api-key'], undefined, 'no AI Studio key is sent to Vertex');
 });
 
+test('Vertex can take the service-account key as JSON in a variable', async (t) => {
+  const g = await mockGoogle();
+  t.after(g.close);
+  const { privateKey } = generateKeyPairSync('rsa', { modulusLength: 2048 });
+  const json = JSON.stringify({ client_email: 'rollcall-railway@p.iam.gserviceaccount.com', private_key: privateKey.export({ type: 'pkcs8', format: 'pem' }) });
+  const gem = createGemini({ GEMINI_PROVIDER: 'vertex', GCP_PROJECT: 'p', GCP_LOCATION: 'global', GOOGLE_CREDENTIALS_JSON: json }, { vertex: g.base, token: `${g.base}/token` });
+  assert.equal(await gem.generate('s', [{ text: 'x' }]), 'OK from mock');
+  assert.equal(g.seen.filter((s) => s.url === '/token').length, 1);
+  await assert.rejects(createGemini({ GEMINI_PROVIDER: 'vertex', GCP_PROJECT: 'p', GOOGLE_CREDENTIALS_JSON: 'not json' }, { vertex: g.base, token: `${g.base}/token` }).generate('s', [{ text: 'x' }]), /not valid JSON/);
+});
+
 test('Vertex errors from Google are readable and short', async (t) => {
   const g = await mockGoogle();
   t.after(g.close);

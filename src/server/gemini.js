@@ -8,7 +8,9 @@
 //                   GEMINI_API_KEY if that is the key you have). No project
 //                   or sign-in tools needed.
 //   vertex          full Vertex AI for a project (GCP_PROJECT). Signs in with
-//                   a service-account key file (GOOGLE_APPLICATION_CREDENTIALS),
+//                   a service-account key, given either as the JSON itself in
+//                   GOOGLE_CREDENTIALS_JSON (for hosts like Railway) or as a
+//                   file path in GOOGLE_APPLICATION_CREDENTIALS,
 //                   else the gcloud tool (`gcloud auth application-default login`).
 //                   Tokens last about an hour and are reused until just before
 //                   they expire.
@@ -33,13 +35,19 @@ export function createGemini(env = process.env, endpoints = {}, fetchImpl = fetc
   const location = env.GCP_LOCATION ?? 'us-central1';
   const key = provider === 'vertex-express' ? (env.VERTEX_API_KEY ?? env.GEMINI_API_KEY) : env.GEMINI_API_KEY;
   const credentialsFile = env.GOOGLE_APPLICATION_CREDENTIALS;
+  const credentialsJson = env.GOOGLE_CREDENTIALS_JSON;
   const tokenUrl = endpoints.token ?? 'https://oauth2.googleapis.com/token';
 
   let cached = null; // { token, until }
   let pending = null;
 
   async function serviceAccountToken() {
-    const sa = JSON.parse(await readFile(credentialsFile, 'utf8'));
+    let sa;
+    try {
+      sa = JSON.parse(credentialsJson ?? (await readFile(credentialsFile, 'utf8')));
+    } catch (err) {
+      throw new Error(credentialsJson ? 'GOOGLE_CREDENTIALS_JSON is not valid JSON.' : `Cannot read the credentials file: ${err.message}`);
+    }
     if (!sa.client_email || !sa.private_key) throw new Error('That credentials file is not a service-account key.');
     const now = Math.floor(Date.now() / 1000);
     const part = (o) => Buffer.from(JSON.stringify(o)).toString('base64url');
@@ -86,7 +94,7 @@ export function createGemini(env = process.env, endpoints = {}, fetchImpl = fetc
 
   async function accessToken() {
     if (cached && cached.until - Date.now() > 120_000) return cached.token;
-    pending ??= (credentialsFile ? serviceAccountToken() : gcloudToken())
+    pending ??= (credentialsJson || credentialsFile ? serviceAccountToken() : gcloudToken())
       .then(({ token, seconds }) => {
         cached = { token, until: Date.now() + (seconds - 60) * 1000 };
         return token;
