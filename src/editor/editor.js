@@ -2,6 +2,7 @@
 // and saves it for the other pages to use.
 
 import { DEFAULT_LAYOUT, normalise, validateLayout, fromRaw, snapToBoundary, distToRect } from '../core/layout.js';
+import { fromBoxes, repairLayout, photoFrame } from '../core/planfit.js';
 import { setBuilding, searchRooms } from '../core/building.js';
 import { directions } from '../core/directions.js';
 
@@ -18,6 +19,8 @@ let tool = 'select';
 let selected = null; // { type: 'room' | 'door', id }
 let drag = null;
 let draft = null; // room being drawn
+let backdrop = null; // { url, x, y, w, h } the imported photo, shown under the plan
+let backdropOpacity = 0.45;
 
 function load() {
   for (const key of [DRAFT, KEY]) {
@@ -78,8 +81,9 @@ function render() {
     })
     .join('');
   const preview = draft ? `<rect class="e-draft" x="${draft.x}" y="${draft.y}" width="${draft.w}" height="${draft.h}"/>` : '';
+  const photo = backdrop ? `<image href="${backdrop.url}" x="${backdrop.x}" y="${backdrop.y}" width="${backdrop.w}" height="${backdrop.h}" opacity="${backdropOpacity}" preserveAspectRatio="none" pointer-events="none"/>` : '';
   svg.innerHTML = `<defs><pattern id="grid" width="${GRID * 5}" height="${GRID * 5}" patternUnits="userSpaceOnUse"><path d="M${GRID * 5} 0 L0 0 0 ${GRID * 5}" class="gridline"/></pattern></defs>
-    <rect x="-200" y="-200" width="1600" height="1100" fill="url(#grid)" data-bg="1"/>${rooms}${doors}${preview}`;
+    <rect x="-200" y="-200" width="1600" height="1100" fill="url(#grid)" data-bg="1"/>${photo}<g class="${backdrop ? 'over-photo' : ''}">${rooms}${doors}${preview}</g>`;
 }
 
 function panel() {
@@ -287,6 +291,16 @@ $('use').addEventListener('click', () => {
   localStorage.removeItem(DRAFT);
   location.href = 'index.html';
 });
+$('photo-opacity').addEventListener('input', (e) => {
+  backdropOpacity = Number(e.target.value) / 100;
+  render();
+});
+$('photo-hide').addEventListener('click', () => {
+  backdrop = null;
+  $('photo-tools').hidden = true;
+  render();
+});
+
 $('builtin').addEventListener('click', () => {
   localStorage.removeItem(KEY);
   localStorage.removeItem(DRAFT);
@@ -369,7 +383,7 @@ async function downscale(file, max = 1400) {
   g.fillStyle = '#fff'; // transparent PNG and SVG plans would otherwise turn black
   g.fillRect(0, 0, c.width, c.height);
   g.drawImage(source, 0, 0, c.width, c.height);
-  return c.toDataURL('image/jpeg', 0.85);
+  return { url: c.toDataURL('image/jpeg', 0.85), w, h };
 }
 
 $('photo').addEventListener('change', async (e) => {
@@ -378,17 +392,22 @@ $('photo').addEventListener('change', async (e) => {
   const status = $('photo-status');
   status.textContent = 'Reading the plan. This can take 10 to 20 seconds.';
   try {
-    const image = await downscale(file);
-    const r = await fetch('/api/layout', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ image }) });
+    const pic = await downscale(file);
+    const r = await fetch('/api/layout', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ image: pic.url }) });
     const out = await r.json();
     if (!r.ok) throw new Error(out.error ?? `server returned ${r.status}`);
-    layout = normalise(fromRaw(out.layout));
+    const fixed = repairLayout(fromBoxes(out.layout, pic.w, pic.h));
+    layout = fixed.layout;
+    const f = photoFrame(pic.w, pic.h);
+    backdrop = { url: pic.url, x: f.x, y: f.y, w: f.w, h: f.h };
+    $('photo-tools').hidden = false;
     selected = null;
     changed();
     const check = validateLayout(layout);
-    status.textContent = check.ok
-      ? `Imported ${Object.keys(layout.rooms).length} rooms and ${Object.keys(layout.doors).length} doors. Compare it with the photo and fix anything wrong before you use it.`
-      : `Imported, but it has problems (see Check). Fix them in the editor.`;
+    const head = check.ok
+      ? `Imported ${Object.keys(layout.rooms).length} rooms and ${Object.keys(layout.doors).length} doors. The photo is shown underneath: compare and fix anything wrong.`
+      : 'Imported, but it still has problems (see Check). Fix them against the photo underneath.';
+    status.innerHTML = `${esc(head)}${fixed.notes.length ? `<br><strong>Repaired automatically, please check:</strong><br>${fixed.notes.map(esc).join('<br>')}` : ''}`;
   } catch (err) {
     status.textContent = err.message.startsWith('This ') || err.message.startsWith('The browser') ? err.message : `Could not read the plan: ${err.message}`;
   }

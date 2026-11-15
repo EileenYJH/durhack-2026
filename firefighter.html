@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#14202b">
+<title>Roll Call firefighter</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="src/ui/style.css">
+</head>
+<body class="ff">
+
+<section id="pick" class="ff-pick">
+  <h1>Roll Call</h1>
+  <p class="ff-lead">Firefighter view. Pick who you are.</p>
+  <form id="pick-form">
+    <div class="field">
+      <label for="code">Channel code (shown on the main screen)</label>
+      <input id="code" autocomplete="off" autocapitalize="characters" required>
+    </div>
+    <div class="ff-crew-pick" role="radiogroup" aria-label="Firefighter">
+      <label class="radio"><input type="radio" name="ff" value="R1" checked> R1</label>
+      <label class="radio"><input type="radio" name="ff" value="R2"> R2</label>
+      <label class="radio"><input type="radio" name="ff" value="R3"> R3</label>
+    </div>
+    <p class="error" id="pick-error" role="alert"></p>
+    <button class="primary" type="submit">Go on air</button>
+  </form>
+</section>
+
+<main id="ff-main" class="ff-main" hidden>
+  <header class="ff-top">
+    <div class="ff-id"><span id="ff-name">R1</span><span id="ff-status" class="ff-chip">Standing by</span></div>
+    <div class="ff-air" aria-label="Air remaining">
+      <span class="k">Air</span>
+      <div class="ff-air-track"><div id="ff-air-fill" class="ff-air-fill"></div></div>
+      <span id="ff-air" class="v">100%</span>
+    </div>
+    <div class="ff-where"><span class="k">You are in</span><span id="ff-room" class="v">Outside</span><span id="ff-heat" class="ff-heat"></span></div>
+  </header>
+
+  <p id="ff-signal" class="ff-signal" role="status">Connecting</p>
+
+  <section class="ff-order" aria-live="polite">
+    <h2>Order</h2>
+    <p id="ff-order" class="ff-order-text">Waiting for the first update.</p>
+    <ol id="ff-route" class="ff-route"></ol>
+  </section>
+
+  <section class="ff-picture">
+    <h2>Your picture <span id="ff-picture-note" class="ff-sub"></span></h2>
+    <svg id="ff-map" role="img" aria-label="Floor plan as this firefighter believes it"></svg>
+    <dl id="ff-numbers" class="ff-numbers"></dl>
+  </section>
+
+  <section class="ff-radio">
+    <h2>Radio <button id="ff-voice" class="ff-voice" aria-pressed="false">Voice off</button></h2>
+    <ol id="ff-radio" class="ff-radio-list" aria-live="polite"></ol>
+  </section>
+
+  <nav class="ff-actions" aria-label="Report to command">
+    <button data-act="clear">Room clear</button>
+    <button data-act="found">Casualty here</button>
+    <button data-act="out">Way out?</button>
+    <button data-act="mayday" class="ff-mayday">Mayday</button>
+  </nav>
+</main>
+
+<script type="module" src="src/ff/ff.js"></script>
+</body>
+</html>

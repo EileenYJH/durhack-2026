@@ -7,6 +7,8 @@ import { createSim } from '../sim/sim.js';
 import { drawStatic, FILL, shown } from './plan.js';
 import { ruleBrief, deliverBrief, voice, aiDirections } from './brief.js';
 import { directions, routePoints } from '../core/directions.js';
+import { toRadio } from './radio.js';
+import { getBuilding, exitDoors, innerRoom, wallOf } from '../core/building.js';
 
 const $ = (id) => document.getElementById(id);
 const NS = 'http://www.w3.org/2000/svg';
@@ -319,5 +321,171 @@ function frame(now) {
 }
 requestAnimationFrame(frame);
 
+// ---- firefighter phones ------------------------------------------------------------
+// This screen runs the incident. Once a second it sends each firefighter's own
+// picture through the server's relay; phones on the same channel show it, and
+// can answer back.
+const FF_KEY = 'rollcall:ff-channel';
+let ffCode = sessionStorage.getItem(FF_KEY);
+if (!ffCode) {
+  ffCode = Array.from({ length: 4 }, () => 'ABCDEFGHJKLMNPQRSTUVWXYZ'[Math.floor(Math.random() * 24)]).join('');
+  sessionStorage.setItem(FF_KEY, ffCode);
+}
+const phones = new Map(); // phone id -> { ff, at }
+const radioLog = [];
+let radioSeen = 0;
+
+function contactWithPost(node) {
+  const post = sim.node('POST');
+  const seen = new Set([post]);
+  const queue = [post];
+  while (queue.length) {
+    const cur = queue.shift();
+    if (cur === node) return true;
+    for (const n of sim.nodes) if (!seen.has(n) && sim.linked(cur, n)) (seen.add(n), queue.push(n));
+  }
+  return false;
+}
+
+function crewFeed() {
+  // radio traffic from new log entries
+  for (const e of [...sim.log].reverse()) {
+    if ((e.n ?? 0) <= radioSeen) continue;
+    radioSeen = e.n;
+    radioLog.push(...toRadio(e));
+  }
+  if (radioLog.length > 80) radioLog.splice(0, radioLog.length - 80);
+
+  const b = getBuilding();
+  const crews = sim.nodes
+    .filter((n) => n.kind === 'responder')
+    .map((n) => {
+      const belief = buildingBelief(n.rep, sim.t);
+      const hz = buildingHazard(n.rep, ROOM_IDS, sim.t);
+      const avoid = fireRooms(hz);
+      const roomName = n.room === 'OUT' ? 'Outside' : ROOMS[n.room].name;
+      let goal = null;
+      let directive;
+      if (!n.alive) directive = 'No contact.';
+      else if (n.status === 'mayday') directive = 'MAYDAY. Stay where you are and keep your alarm sounding. Help is coming.';
+      else if (n.status === 'low-air') {
+        goal = 'OUT';
+        directive = `Withdraw to the nearest safe exit. Air ${Math.round(n.air)}%.`;
+      } else if (n.status === 'refill') directive = 'Changing cylinder at the entrance.';
+      else if (n.mission) {
+        goal = n.target;
+        directive = `Reach ${sim.node(n.mission).id} in ${ROOMS[n.target]?.name ?? 'the building'}. Teammate down.`;
+      } else if (n.target) {
+        goal = n.target;
+        directive = `Search ${ROOMS[n.target].name}. ${belief[n.target].why}.`;
+      } else if (!sim.alarm) directive = 'No incident. Standing by.';
+      else directive = n.room === 'OUT' ? 'Stand by at the entrance for tasking.' : `Hold in ${roomName} for tasking.`;
+      let route = [];
+      if (goal && n.room !== goal) {
+        avoid.delete(goal);
+        if (n.room !== 'OUT') avoid.delete(n.room);
+        route = directions(n.room, goal, { avoid });
+      }
+      // The nearest exit this firefighter believes is not cut off by fire.
+      const COMPASS = { N: 'North', S: 'South', E: 'East', W: 'West' };
+      const exits = exitDoors()
+        .filter((e) => !avoid.has(innerRoom(e)) || innerRoom(e) === n.room)
+        .sort((p, q) => Math.hypot(DOORS[p].x - n.x, DOORS[p].y - n.y) - Math.hypot(DOORS[q].x - n.x, DOORS[q].y - n.y));
+      const exitName = exits.length ? `${COMPASS[wallOf(innerRoom(exits[0]), exits[0])]} exit` : null;
+      const hc = headcount(belief);
+      return {
+        id: n.id,
+        label: n.label,
+        alive: n.alive,
+        status: n.status,
+        air: Math.round(n.air),
+        room: n.room,
+        roomName,
+        target: n.target,
+        x: Math.round(n.x),
+        y: Math.round(n.y),
+        heatHere: n.room === 'OUT' ? null : Math.round(sim.rooms[n.room].heat),
+        directive,
+        route,
+        contact: n.alive && contactWithPost(n),
+        inside: hc.low === hc.high ? String(hc.low) : `${hc.low} to ${hc.high}`,
+        burning: Object.values(hz).filter((h) => h.level === 'fire').length,
+        unknown: hc.unknown,
+        exit: exitName,
+        belief: Object.fromEntries(ROOM_IDS.map((id) => [id, { s: belief[id].state, c: belief[id].count ?? 0, h: hz[id].level }])),
+        mates: Object.entries(n.rep.claims)
+          .filter(([id]) => id !== n.id)
+          .map(([id, c]) => ({ id, x: Math.round(c.x), y: Math.round(c.y), age: Math.round(sim.t - c.at) })),
+      };
+    });
+  return { type: 'feed', t: sim.t, alarm: sim.alarm, jammed: sim.t < sim.jamUntil, building: { name: b.name, rooms: b.rooms, doors: b.doors }, crews, radio: radioLog.slice(-50) };
+}
+
+function applyPhone(msg) {
+  if (!msg || !msg.ff) return;
+  phones.set(msg.from ?? msg.ff, { ff: msg.ff, at: Date.now() });
+  if (msg.type !== 'cmd') return;
+  const n = sim.node(msg.ff);
+  if (!n) return;
+  if (msg.action === 'mayday') {
+    if (n.room === 'OUT') sim.tell(msg.ff, 'You are outside. Mayday not raised.');
+    else sim.mayday(msg.ff);
+  } else if (msg.action === 'clear' || msg.action === 'found') {
+    if (!sim.report(msg.ff, msg.action)) {
+      const where = n.room === 'OUT' ? 'outside' : `in ${ROOMS[n.room].name}, a corridor`;
+      sim.tell(msg.ff, `You are ${where}. Report from inside the room you searched.`);
+    }
+  } else if (msg.action === 'out') {
+    const hz = buildingHazard(n.rep, ROOM_IDS, sim.t);
+    const avoid = fireRooms(hz);
+    if (n.room !== 'OUT') avoid.delete(n.room);
+    sim.tell(msg.ff, n.room === 'OUT' ? 'You are already outside.' : directions(n.room, 'OUT', { avoid }).join(' '));
+  }
+}
+
+(function startPhones() {
+  const base = `${location.origin}/firefighter.html?c=${ffCode}`;
+  $('ff-code').textContent = ffCode;
+  $('ff-link').href = base;
+  $('ff-link').textContent = base;
+  if (/^(localhost|127\.|\[::1\])/.test(location.hostname)) $('ff-local').textContent = 'This screen is on localhost, so a phone cannot reach it. Open the hosted site on this computer instead (the Railway address), then scan.';
+  const src = new EventSource(`/mesh/stream?mesh=${ffCode}&id=board`);
+  src.onmessage = (e) => {
+    try {
+      const msg = JSON.parse(e.data);
+      applyPhone({ ...msg, from: msg.from });
+    } catch {
+      // ignore anything that is not ours
+    }
+  };
+  setInterval(() => {
+    for (const [k, v] of phones) if (Date.now() - v.at > 12000) phones.delete(k);
+    $('ff-count').textContent = String(phones.size);
+    if (!phones.size && $('ff-panel').hidden) return; // nobody listening
+    fetch(`/mesh/send?mesh=${ffCode}&id=board`, { method: 'POST', body: JSON.stringify(crewFeed()) }).catch(() => {});
+  }, 1000);
+  let qrDone = false;
+  $('ff-open').addEventListener('click', async (e) => {
+    const open = $('ff-panel').hidden;
+    $('ff-panel').hidden = !open;
+    e.currentTarget.setAttribute('aria-expanded', String(open));
+    if (open && !qrDone) {
+      qrDone = true;
+      try {
+        await new Promise((ok, bad) => {
+          const s = document.createElement('script');
+          s.src = 'https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js';
+          s.onload = ok;
+          s.onerror = bad;
+          document.head.append(s);
+        });
+        new window.QRCode($('ff-qr'), { text: base, width: 168, height: 168, colorDark: '#14202b', colorLight: '#ffffff' });
+      } catch {
+        $('ff-qr').textContent = 'QR code unavailable offline. Use the link.';
+      }
+    }
+  });
+})();
+
 // For scripted checks from the console.
-window.rollcall = { get sim() { return sim; }, select: (id) => { viewer = id; drawPanels(); } };
+window.rollcall = { crewFeed: () => crewFeed(), ffCode: () => ffCode, get sim() { return sim; }, select: (id) => { viewer = id; drawPanels(); } };

@@ -344,3 +344,89 @@ test('fire spreads, destroys sensors and blocks doors; a downed firefighter is r
   assert.ok(m.maydays >= 1);
   assert.ok(m.crewRecovered >= 1 || !r2.alive || r2.status === 'mayday', 'the mayday was answered or is still open');
 });
+
+import { fromBoxes, repairLayout, sharedWall, photoFrame } from '../src/core/planfit.js';
+
+test('photo boxes map onto the drawing area keeping the photo proportions', () => {
+  const f = photoFrame(1200, 800);
+  assert.equal(Math.round(f.w), 780); // limited by height: 520 / 800 x 1200
+  const l = fromBoxes({ rooms: [{ id: 'A', name: 'A', box_2d: [0, 0, 500, 500] }], doors: [] }, 1200, 800);
+  assert.equal(Math.round(l.rooms.A.w), 390);
+  assert.equal(Math.round(l.rooms.A.h), 260);
+});
+
+test('repair closes small gaps, puts doors on shared walls and adds a missing exit', () => {
+  const messy = {
+    name: 'messy',
+    rooms: {
+      H: { name: 'Hall', x: 100, y: 200, w: 600, h: 80, hall: true },
+      A: { name: 'Room A', x: 100, y: 60, w: 290, h: 132 }, // 8 short of the hall
+      B: { name: 'Room B', x: 396, y: 52, w: 304, h: 143 }, // 5 short, and 6 apart from A
+      C: { name: 'Room C', x: 100, y: 289, w: 600, h: 150 }, // 9 below the hall, and no door at all
+    },
+    doors: {
+      d1: { a: 'H', b: 'A', x: 240, y: 230 }, // point in the middle of the hall
+      d2: { a: 'B', b: 'H', x: 500, y: 196 },
+    },
+  };
+  const before = validateLayout(normalise(messy));
+  assert.equal(before.ok, false);
+  const { layout, notes } = repairLayout(messy);
+  const after = validateLayout(layout);
+  assert.deepEqual(after.errors, []);
+  assert.ok(sharedWall(layout.rooms.A, layout.rooms.H), 'A now touches the hall');
+  assert.ok(sharedWall(layout.rooms.C, layout.rooms.H), 'C now touches the hall');
+  assert.ok(Object.values(layout.doors).some((d) => d.a === 'OUT'), 'an exit was added');
+  assert.match(notes.join(' '), /No exit was found/);
+  assert.match(notes.join(' '), /Room C, which had no way in/);
+});
+
+test('repair drops doors between rooms that do not touch and says so', () => {
+  const l = {
+    rooms: { A: { name: 'A', x: 0, y: 0, w: 100, h: 100 }, B: { name: 'B', x: 400, y: 0, w: 100, h: 100 } },
+    doors: { x: { a: 'OUT', b: 'A', x: 0, y: 50 }, d: { a: 'A', b: 'B', x: 250, y: 50 } },
+  };
+  const { layout, notes } = repairLayout(l);
+  assert.equal(layout.doors.d, undefined);
+  assert.match(notes.join(' '), /do not touch/);
+  // the clear floor between them gets a corridor, flagged for checking
+  assert.match(notes.join(' '), /Added corridor 1" from A to B across clear floor/);
+  assert.deepEqual(validateLayout(layout).errors, []);
+});
+
+test('repair leaves a room unconnected, and says so, when it is too far from anything', () => {
+  const l = {
+    rooms: {
+      A: { name: 'A', x: 0, y: 0, w: 100, h: 300 },
+      W: { name: 'Wall room', x: 100, y: 0, w: 100, h: 300 },
+      B: { name: 'B', x: 800, y: 0, w: 100, h: 300 }, // 600 away: too far for a corridor
+    },
+    doors: { x: { a: 'OUT', b: 'A', x: 0, y: 50 } },
+  };
+  const { notes } = repairLayout(l);
+  assert.match(notes.join(' '), /B could not be connected/);
+});
+
+import { toRadio } from '../src/ui/radio.js';
+
+test('the event log becomes radio traffic between command and each firefighter', () => {
+  const r = (text) => toRadio({ n: 1, t: 30, text });
+  assert.deepEqual(r('Responder 2 heads for Store. Store sensor sees someone not moving.').map((x) => [x.from, x.ff]), [['command', 'R2']]);
+  assert.match(r('Responder 2 heads for Store. Store sensor sees someone not moving.')[0].text, /^Search Store\. /);
+  assert.deepEqual(r('Responder 1 found 2 in Lab 1').map((x) => [x.from, x.ff, x.text]), [['ff', 'R1', 'Found 2 in Lab 1. Bringing them out.']]);
+  const both = r('Responder 3 breaks off to reach Responder 1 in Seminar (silent 41 s)');
+  assert.deepEqual(both.map((x) => x.ff), ['R3', 'R1']);
+  assert.ok(both.every((x) => x.urgent));
+  assert.equal(r('Fire has spread to Corridor')[0].ff, null);
+  assert.equal(r('Door A destroyed by heat').length, 0, 'sensor losses are not read out');
+  assert.equal(r('To Responder 1: You are already outside.')[0].text, 'You are already outside.');
+});
+
+test('firefighters can report and be spoken to from the simulation', () => {
+  const sim = createSim(2);
+  for (let i = 0; i < 50; i++) sim.step(0.1);
+  sim.tell('R1', 'Test message.');
+  assert.match(sim.log[0].text, /^To Responder 1: Test message\.$/);
+  assert.ok(sim.log[0].n > 0, 'entries are numbered for the radio feed');
+  assert.equal(sim.report('R1', 'clear'), false, 'cannot report a room from outside');
+});

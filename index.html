@@ -27,8 +27,20 @@
     <button id="pause" aria-pressed="false">Pause</button>
     <button id="speed">Speed 1x</button>
     <button id="reset">Reset</button>
+    <button id="ff-open" aria-expanded="false">Firefighter phones</button>
   </div>
 </header>
+
+<section id="ff-panel" class="ff-panel" hidden aria-label="Connect a firefighter phone">
+  <div class="ff-panel-text">
+    <h2>Put a firefighter on a phone</h2>
+    <p>Open this link on another device, or scan the code. Keep this screen open: it runs the incident and streams each firefighter's view once a second.</p>
+    <p class="ff-link"><a id="ff-link" target="_blank" rel="noopener"></a></p>
+    <p>Channel <strong id="ff-code"></strong>. Phones on air: <strong id="ff-count">0</strong></p>
+    <p class="help" id="ff-local"></p>
+  </div>
+  <div id="ff-qr" class="ff-qr" aria-label="QR code for the firefighter link"></div>
+</section>
 
 <div class="chaos" role="toolbar" aria-label="Chaos controls">
   <span class="chaos-title">Break it</span>

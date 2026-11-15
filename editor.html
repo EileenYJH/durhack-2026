@@ -54,6 +54,11 @@
         <input id="photo" type="file" accept="image/*">
         <p class="help">A fire evacuation plan from the wall works well. Gemini reads it and proposes rooms and doors. <strong>Check the result</strong>: a wrong wall gives wrong directions.</p>
         <p id="photo-status" class="help" role="status"></p>
+        <div id="photo-tools" class="photo-tools" hidden>
+          <label for="photo-opacity">Photo underneath</label>
+          <input id="photo-opacity" type="range" min="0" max="90" step="5" value="45">
+          <button id="photo-hide" type="button">Hide photo</button>
+        </div>
       </div>
       <div class="brief-row">
         <button id="download">Download JSON</button>

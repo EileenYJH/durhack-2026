@@ -73,7 +73,8 @@ export function createSim(seed = 7) {
     return { x: r.x + 28 + rand() * (r.w - 56), y: r.y + 30 + rand() * (r.h - 60) };
   };
   const say = (text, kind = 'info') => {
-    sim.log.unshift({ t: sim.t, text, kind });
+    sim.logN = (sim.logN ?? 0) + 1;
+    sim.log.unshift({ n: sim.logN, t: sim.t, text, kind });
     if (sim.log.length > 80) sim.log.pop();
   };
   const name = (id) => (id === 'OUT' ? 'outside' : ROOMS[id].name);
@@ -765,6 +766,21 @@ export function createSim(seed = 7) {
     n.alive = !n.alive;
     say(`${n.label} ${n.alive ? 'restarted' : 'failed'}`, n.alive ? 'ok' : 'warn');
   };
+  // Command speaking to one firefighter (shown on their radio).
+  sim.tell = (id, text) => {
+    if (byId[id]?.kind === 'responder') say(`To ${byId[id].label}: ${text}`, 'act');
+  };
+  // A firefighter's own report from where they stand: written to their record,
+  // which then spreads to everyone they can reach.
+  sim.report = (id, what) => {
+    const n = byId[id];
+    if (n?.kind !== 'responder' || !n.alive || n.room === 'OUT' || isHall(n.room)) return false;
+    if (what === 'clear') writeReport(n.rep, n.room, n.id, { state: 'empty', count: 0, conf: 0.98, kind: 'search' }, sim.t);
+    else writeReport(n.rep, n.room, n.id, { state: 'still', count: 1, conf: 0.95, kind: 'search' }, sim.t);
+    say(what === 'clear' ? `${n.label} searched ${ROOMS[n.room].name}: clear` : `${n.label} found 1 in ${ROOMS[n.room].name}`, what === 'clear' ? 'ok' : 'warn');
+    return true;
+  };
+
   sim.mayday = (id) => {
     const n = byId[id];
     if (n?.kind === 'responder' && n.alive && n.room !== 'OUT') mayday(n, 'not moving');
