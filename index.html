@@ -28,6 +28,7 @@
     <button id="speed">Speed 1x</button>
     <button id="reset">Reset</button>
     <button id="ff-open" aria-expanded="false">Firefighter phones</button>
+    <button id="guide-open" class="guide-open" aria-expanded="false" aria-controls="guide-panel">Demo guide</button>
   </div>
 </header>
 
@@ -113,6 +114,17 @@
   </section>
 </main>
 
+<aside id="guide-panel" class="guide-panel" hidden aria-label="Demo guide">
+  <div class="guide-head"><span class="guide-label">Demo guide</span><span id="guide-count" class="guide-count"></span><button id="guide-close" class="guide-x" aria-label="Close the demo guide">×</button></div>
+  <h2 id="guide-title" class="guide-title"></h2>
+  <p class="guide-k">Say</p>
+  <p id="guide-say" class="guide-say"></p>
+  <p class="guide-k">Watch</p>
+  <p id="guide-watch" class="guide-watch"></p>
+  <button id="guide-do" class="primary guide-do"></button>
+  <p id="guide-status" class="guide-status" role="status" aria-live="polite"></p>
+  <div class="guide-nav"><button id="guide-back">Back</button><span class="guide-keys">← → to move, Enter to do it</span><button id="guide-next">Next</button></div>
+</aside>
 <script type="module" src="src/ui/app.js"></script>
 </body>
 </html>

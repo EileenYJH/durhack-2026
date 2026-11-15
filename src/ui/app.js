@@ -8,6 +8,7 @@ import { drawStatic, FILL, shown } from './plan.js';
 import { ruleBrief, deliverBrief, voice, aiDirections } from './brief.js';
 import { directions, routePoints } from '../core/directions.js';
 import { toRadio } from './radio.js';
+import { createGuide } from './guide.js';
 import { getBuilding, exitDoors, innerRoom, wallOf } from '../core/building.js';
 
 const $ = (id) => document.getElementById(id);
@@ -97,10 +98,10 @@ function drawLive() {
 // After a link is severed, show in its own colour the shortest chain of working
 // links that still joins its two ends: the route the news now takes.
 let detour = null; // { a, b, until }
-function detourPath(from, to) {
+function detourPath(from, to, without = null) {
   const next = new Map();
   for (const l of sim.links()) {
-    if (l.severed || l.q <= 0 || !l.a.alive || !l.b.alive) continue;
+    if (l.severed || l.key === without || l.q <= 0 || !l.a.alive || !l.b.alive) continue;
     for (const [p, q] of [[l.a, l.b], [l.b, l.a]]) {
       if (!next.has(p.id)) next.set(p.id, []);
       next.get(p.id).push(q.id);
@@ -131,7 +132,29 @@ function detourMarkup() {
 // outline marks where. The log at the bottom of the page is too far away to notice.
 let focus = null; // { until, tone, at: { x, y, r } | { rect } }
 let eventTimer = 0;
-function notice(title, watch, { tone = 'fire', at = null, seconds = 7 } = {}) {
+// Something the presenter did keeps the banner for a few seconds; what the
+// incident does by itself in that time waits its turn (it is in the event strip
+// under the plan anyway), and the latest of those is shown once the time is up.
+let userHeldUntil = 0;
+let pendingSim = null;
+let pendingTimer = 0;
+function simNotice(...args) {
+  const wait = userHeldUntil - performance.now();
+  if (wait <= 0) return showNotice(...args);
+  pendingSim = args;
+  clearTimeout(pendingTimer);
+  pendingTimer = setTimeout(() => {
+    if (pendingSim) showNotice(...pendingSim);
+    pendingSim = null;
+  }, wait);
+}
+function notice(...args) {
+  userHeldUntil = performance.now() + 4000;
+  pendingSim = null;
+  clearTimeout(pendingTimer);
+  showNotice(...args);
+}
+function showNotice(title, watch, { tone = 'fire', at = null, seconds = 7 } = {}) {
   const box = $('event');
   // Keep the banner off the place it is pointing at: low on the plan when that is high up.
   const spot = typeof at === 'function' ? at() : at;
@@ -173,35 +196,35 @@ function announceSim() {
     if ((m = e.text.match(/^MAYDAY\. (Responder \d+) is down/))) {
       const id = sim.nodes.find((n) => n.label === m[1])?.id;
       const trappedBy = /trapped/.test(e.text);
-      notice(
+      simNotice(
         trappedBy ? `Mayday: ${id} is trapped` : `Mayday: ${id} is down`,
         trappedBy ? 'The doorway collapsed and there is no other way out. Watch the <b>nearest free teammate</b> come and force it open.' : 'Watch the <b>nearest free teammate</b>: nobody assigns the rescue, they break off on their own.',
         { at: id && nodeAt(id, 34) },
       );
     } else if ((m = e.text.match(/^(Responder \d+) breaks off to reach (Responder \d+)/))) {
       const id = sim.nodes.find((n) => n.label === m[1])?.id;
-      notice(`${id} breaks off to help`, `It saw the mayday in its own copy. Watch it walk to ${m[2].replace('Responder ', 'R')}.`, { tone: 'go', at: id && nodeAt(id, 30) });
+      simNotice(`${id} breaks off to help`, `It saw the mayday in its own copy. Watch it walk to ${m[2].replace('Responder ', 'R')}.`, { tone: 'go', at: id && nodeAt(id, 30) });
     } else if ((m = e.text.match(/^(Responder \d+) has reached (Responder \d+)/))) {
       const id = sim.nodes.find((n) => n.label === m[1])?.id;
-      notice(`${id} has ${m[2].replace('Responder ', 'R')}`, 'They come out <b>together</b>, at the casualty\'s pace, all the way to the assembly point.', { tone: 'go', at: id && nodeAt(id, 36) });
+      simNotice(`${id} has ${m[2].replace('Responder ', 'R')}`, 'They come out <b>together</b>, at the casualty\'s pace, all the way to the assembly point.', { tone: 'go', at: id && nodeAt(id, 36) });
     } else if ((m = e.text.match(/^(Responder \d+) is forcing the collapsed doorway to reach (Responder \d+)/))) {
       const id = sim.nodes.find((n) => n.label === m[1])?.id;
-      notice(`${id} forces the collapsed doorway`, `The only way to ${m[2].replace('Responder ', 'R')} is blocked. Forcing it open takes about 10 seconds; then it is open for everyone.`, { tone: 'hazard', at: id && nodeAt(id, 30), seconds: 10 });
+      simNotice(`${id} forces the collapsed doorway`, `The only way to ${m[2].replace('Responder ', 'R')} is blocked. Forcing it open takes about 10 seconds; then it is open for everyone.`, { tone: 'hazard', at: id && nodeAt(id, 30), seconds: 10 });
     } else if ((m = e.text.match(/^(Responder \d+) has a way out again/))) {
       const id = sim.nodes.find((n) => n.label === m[1])?.id;
-      notice(`${id} has a way out again`, 'The doorway was forced open. They heard it in their own copy and are walking out.', { tone: 'go', at: id && nodeAt(id, 30) });
+      simNotice(`${id} has a way out again`, 'The doorway was forced open. They heard it in their own copy and are walking out.', { tone: 'go', at: id && nodeAt(id, 30) });
     } else if ((m = e.text.match(/^Flashover in (.+?)\./))) {
       const id = ROOM_IDS.find((r) => ROOMS[r].name === m[1]);
-      notice(`Flashover in ${m[1]}`, 'The whole room ignites and its doors are lost. Sensors in it die; the room turns <b>unknown</b>, never empty.', { at: id && roomAt(id) });
+      simNotice(`Flashover in ${m[1]}`, 'The whole room ignites and its doors are lost. Sensors in it die; the room turns <b>unknown</b>, never empty.', { at: id && roomAt(id) });
     } else if ((m = e.text.match(/^(Responder \d+) is pulling out/))) {
       const id = sim.nodes.find((n) => n.label === m[1])?.id;
-      notice(`${id} pulls out on their own`, 'Their way out is heating towards 240°C. They leave while it is still passable, without being told.', { tone: 'hazard', at: id && nodeAt(id, 30) });
+      simNotice(`${id} pulls out on their own`, 'Their way out is heating towards 240°C. They leave while it is still passable, without being told.', { tone: 'hazard', at: id && nodeAt(id, 30) });
     }
   }
   const r = sim.metrics().reconverge;
   if (r !== null && r !== lastReconverge) {
     lastReconverge = r;
-    notice(`All nodes agree again after ${r.toFixed(1)} s`, 'Every sensor and firefighter now holds the same picture. Nothing was lost while they could not hear each other.', { tone: 'go' });
+    simNotice(`All nodes agree again after ${r.toFixed(1)} s`, 'Every sensor and firefighter now holds the same picture. Nothing was lost while they could not hear each other.', { tone: 'go' });
   }
 }
 
@@ -369,6 +392,8 @@ $('reset').addEventListener('click', () => {
   lastReconverge = null;
   focus = null;
   detour = null;
+  pendingSim = null;
+  clearTimeout(pendingTimer);
   $('event').hidden = true;
   drawPanels();
 });
@@ -406,13 +431,35 @@ $('guide').addEventListener('submit', async (e) => {
 $('show-truth').addEventListener('change', (e) => {
   showTruth = e.currentTarget.checked;
 });
+// What a click on the plan means in the current mode: the link, room or node.
 function pick(e) {
   const g = e.target.closest?.('.node');
   const id = g?.dataset.id;
   const kind = id ? sim.node(id).kind : null;
   if (mode === 'sever') {
     const key = e.target.closest?.('.linkhit')?.dataset.link;
-    if (!key) return;
+    if (key) act('sever', key);
+  } else if (mode === 'ignite') {
+    // Whatever was clicked (the floor, the room's name, its count, a person),
+    // the room is the one under the pointer. The smallest one wins where they nest.
+    let room = g && kind === 'room' ? sim.node(id).room : null;
+    if (!room && Number.isFinite(e.clientX)) {
+      const p = new DOMPoint(e.clientX, e.clientY).matrixTransform(map.getScreenCTM().inverse());
+      room = ROOM_IDS.filter((r) => p.x >= ROOMS[r].x && p.x <= ROOMS[r].x + ROOMS[r].w && p.y >= ROOMS[r].y && p.y <= ROOMS[r].y + ROOMS[r].h).sort((a, b) => ROOMS[a].w * ROOMS[a].h - ROOMS[b].w * ROOMS[b].h)[0] ?? null;
+    }
+    if (!room && e.target.id?.startsWith('fill-')) room = e.target.id.slice(5);
+    if (room) act('ignite', room);
+  } else if (mode === 'door' && kind === 'door') act('door', id);
+  else if (mode === 'kill' && (kind === 'door' || kind === 'room')) act('kill', id);
+  else if (mode === 'mayday' && kind === 'responder') act('mayday', id);
+  else if (mode === 'inspect' && id) act('inspect', id);
+}
+
+// Does one "Break it" action and announces it. Used by clicks on the plan and
+// by the demo guide, so both behave exactly the same.
+function act(what, target) {
+  if (what === 'sever') {
+    const key = target;
     sim.sever(key);
     const [a, b] = key.split('|').map((k) => sim.node(k));
     const cut = sim.severed.has(key);
@@ -428,39 +475,38 @@ function pick(e) {
       at: { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2, r: 24 },
       seconds: cut ? 12 : 7,
     });
-  } else if (mode === 'ignite') {
-    // Whatever was clicked (the floor, the room's name, its count, a person),
-    // the room is the one under the pointer. The smallest one wins where they nest.
-    let room = g && kind === 'room' ? sim.node(id).room : null;
-    if (!room && Number.isFinite(e.clientX)) {
-      const p = new DOMPoint(e.clientX, e.clientY).matrixTransform(map.getScreenCTM().inverse());
-      room = ROOM_IDS.filter((r) => p.x >= ROOMS[r].x && p.x <= ROOMS[r].x + ROOMS[r].w && p.y >= ROOMS[r].y && p.y <= ROOMS[r].y + ROOMS[r].h).sort((a, b) => ROOMS[a].w * ROOMS[a].h - ROOMS[b].w * ROOMS[b].h)[0] ?? null;
-    }
-    if (!room && e.target.id?.startsWith('fill-')) room = e.target.id.slice(5);
-    if (!room) return;
+  } else if (what === 'ignite') {
+    const room = target;
     const was = sim.rooms[room].burning;
     sim.ignite(room);
     if (was) notice(`${ROOMS[room].name} is already burning`, 'Pick another room.', { tone: 'hazard', at: roomAt(room), seconds: 3 });
     else notice(`Fire started in ${ROOMS[room].name}`, 'Heat and smoke spread <b>through the doorways</b>. Sensors die at 250°C and their rooms turn <b>unknown</b>. Watch the firefighters re-plan around it.', { at: roomAt(room) });
-  } else if (mode === 'door' && kind === 'door') {
+  } else if (what === 'door') {
+    const id = target;
     sim.blockDoor(id);
     notice(`Doorway collapsed: ${sim.node(id).label}`, 'Nobody can pass. The first firefighter to reach it reports it, and from then on <b>every route avoids it</b>.', { at: nodeAt(id, 24) });
-  } else if (mode === 'kill' && (kind === 'door' || kind === 'room')) {
+  } else if (what === 'kill') {
+    const id = target;
     sim.toggleNode(id);
     const n = sim.node(id);
     const room = n.kind === 'room' ? ROOMS[n.room].name : null;
     if (n.alive) notice(`${n.label} back on`, 'It starts reporting again, and its room fills back in.', { tone: 'go', at: nodeAt(id, 24) });
     else notice(`Sensor killed: ${n.label}`, room ? `Watch <b>${room}</b>: with no fresh reading it turns <b>unknown</b> within seconds, never "empty".` : 'This doorway stops counting. The rooms on each side lose their count and turn <b>unknown</b> unless another sensor or a firefighter sees them.', { at: nodeAt(id, 24) });
-  } else if (mode === 'mayday' && kind === 'responder') {
+  } else if (what === 'mayday') {
+    const id = target;
     const n = sim.node(id);
     if (n.room === 'OUT' || n.status === 'mayday') {
       notice(`${id} can't go down here`, n.room === 'OUT' ? 'They are outside. Pick a firefighter inside the building.' : 'They are already down.', { tone: 'hazard', at: nodeAt(id, 30), seconds: 3 });
       return;
     }
-    sim.mayday(id); // announced by announceSim from the log
-  } else if (mode === 'inspect' && id) {
+    sim.mayday(id);
+    seenLog = Math.max(seenLog, sim.log[0]?.n ?? 0); // announced here, not again from the log
+    notice(`Mayday: ${id} is down`, 'Watch the <b>nearest free teammate</b>: nobody assigns the rescue, they break off on their own.', { at: nodeAt(id, 34) });
+  } else if (what === 'inspect') {
+    const id = target;
     viewer = id;
-    notice(`Now seeing the building as ${sim.node(id).label} believes it`, 'The plan and the right-hand panel show <b>this node\'s own copy</b>. Compare two firefighters during a cut link: their pictures differ.', { tone: 'go', at: nodeAt(id, 30), seconds: 5 });
+    if (id === 'POST') notice("Back to the command post's picture", 'The plan and panels show what the command post believes again.', { tone: 'go', at: nodeAt(id, 30), seconds: 4 });
+    else notice(`Now seeing the building as ${sim.node(id).label} believes it`, "The plan and the right-hand panel show <b>this node's own copy</b>. Compare two firefighters during a cut link: their pictures differ.", { tone: 'go', at: nodeAt(id, 30), seconds: 5 });
   } else return;
   drawPanels();
 }
@@ -688,4 +734,17 @@ function applyPhone(msg) {
 })();
 
 // For scripted checks from the console.
-window.rollcall = { crewFeed: () => crewFeed(), ffCode: () => ffCode, get sim() { return sim; }, select: (id) => { viewer = id; drawPanels(); } };
+// The demo guide: walks through every case with one button per step.
+const guide = createGuide({
+  sim: () => sim,
+  act,
+  press: (id) => $(id).click(),
+  setViewer: (v) => {
+    viewer = v;
+    drawPanels();
+  },
+  detourPath,
+  $,
+});
+
+window.rollcall = { crewFeed: () => crewFeed(), ffCode: () => ffCode, get sim() { return sim; }, select: (id) => { viewer = id; drawPanels(); }, guide };

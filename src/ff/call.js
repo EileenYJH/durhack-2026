@@ -1,5 +1,7 @@
 // Live voice call with "Command", an ElevenLabs voice agent. The firefighter
-// talks, can interrupt at any moment, and Command answers from this phone's
+// holds a button to talk (push to talk, like a radio: the microphone is off
+// otherwise, so the noise of the fireground never reaches Command), can
+// interrupt at any moment, and Command answers from this phone's
 // live picture through four tools. Urgent radio traffic is pushed into the
 // call as it happens. The API key stays on the server; the phone gets a
 // short-lived token.
@@ -13,6 +15,7 @@ const esc = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;');
 
 let convo = null;
 let mode = 'listening';
+let talking = false;
 let layoutKey = '';
 let startedAt = 0;
 let lastOrder = '';
@@ -161,21 +164,26 @@ async function start() {
       connectionType: 'webrtc',
       dynamicVariables: { ff: window.rcState?.me.ff ?? 'R1' },
       clientTools: TOOLS,
-      onConnect: () => setStatus('On air. Talk any time; interrupt whenever you need to.', 'ok'),
+      onConnect: () => {
+        convo?.setMicMuted(true);
+        setStatus('On air. Hold the button to talk; let go when you are done.', 'ok');
+      },
       onDisconnect: () => stop(true),
       onError: (err) => setStatus(`Call error: ${err?.message ?? err}`, 'bad'),
       onModeChange: ({ mode: m }) => {
         mode = m;
-        setStatus(m === 'speaking' ? 'Command is speaking. Talk to interrupt.' : 'Listening…', 'ok');
+        if (!talking) setStatus(m === 'speaking' ? 'Command is speaking. Hold to talk to interrupt.' : 'Hold the button to talk.', 'ok');
       },
       onMessage: (m) => {
         const who = (m.source ?? m.role) === 'user' ? 'You' : 'Command';
         if (m.message) line(who, m.message);
       },
     });
+    convo.setMicMuted(true);
     btn.textContent = 'End call';
     btn.classList.add('live');
     btn.disabled = false;
+    $('ff-ptt').hidden = false;
     $('ff-call-log').hidden = false;
   } catch (err) {
     window.rcCallActive = false;
@@ -190,14 +198,48 @@ async function stop(fromSdk = false) {
   convo = null;
   window.rcCallActive = false;
   urgent.length = 0;
+  talk(false);
+  $('ff-ptt').hidden = true;
   if (c && !fromSdk) await c.endSession().catch(() => {});
   $('ff-call').textContent = 'Talk to Command';
   $('ff-call').classList.remove('live');
   setStatus('Call ended.');
 }
 
+// Push to talk: the microphone is open only while the button (or Space) is held.
+function talk(on) {
+  if (talking === on) return;
+  talking = on;
+  const b = $('ff-ptt');
+  b.classList.toggle('on', on);
+  b.setAttribute('aria-pressed', String(on));
+  b.textContent = on ? 'Talking… let go to send' : 'Hold to talk';
+  if (!convo) return;
+  convo.setMicMuted(!on);
+  if (on) setStatus(mode === 'speaking' ? 'Interrupting Command…' : 'Command can hear you.', 'ok');
+  else setStatus('Mic off. Command is answering…', 'ok');
+}
+
 export function setupCall() {
   $('ff-call').addEventListener('click', () => (convo ? stop() : start()));
+  const ptt = $('ff-ptt');
+  ptt.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    ptt.setPointerCapture?.(e.pointerId);
+    talk(true);
+  });
+  for (const ev of ['pointerup', 'pointercancel', 'lostpointercapture']) ptt.addEventListener(ev, () => talk(false));
+  ptt.addEventListener('contextmenu', (e) => e.preventDefault()); // a long press must not open a menu
+  window.addEventListener('blur', () => talk(false));
+  document.addEventListener('keydown', (e) => {
+    if (e.code === 'Space' && convo && !e.repeat && !e.target.closest?.('input, textarea')) {
+      e.preventDefault();
+      talk(true);
+    }
+  });
+  document.addEventListener('keyup', (e) => {
+    if (e.code === 'Space') talk(false);
+  });
   setInterval(watch, 700);
 }
 
@@ -252,5 +294,12 @@ window.rcTextCall = {
   },
   async end() {
     await stop();
+  },
+};
+// For checking push to talk without a live call: stand in a fake call object.
+export const _test = {
+  fakeCall(c) {
+    convo = c;
+    $('ff-ptt').hidden = !c;
   },
 };

@@ -42,7 +42,7 @@ Use the metaphor to open and to close; in between, show the real system. Don't o
 | Main screen | Laptop, `https://durhack-2026-production.up.railway.app/` (the board). Press **Reset** so the clock reads 00:00. |
 | Firefighter phone | Your phone. On the board, press **Firefighter phones**, scan the QR code, choose **R1**, **Go on air**. The phone must use the `https://` link, or the microphone will not work. |
 | Sound | Laptop volume up. The phone's call uses the phone's own speaker and microphone. |
-| Voice agent | Press **Talk to Command** once on the phone and say "Command, R1, radio check". Hang up. If it fails, ElevenLabs credits or the agent ID are the problem; use the video for the voice part. |
+| Voice agent | Press **Talk to Command** once on the phone, then **hold** the big **Hold to talk** button and say "Command, R1, radio check". Let go. Hang up. If it fails, ElevenLabs credits or the agent ID are the problem; use the video for the voice part. |
 | Gemini | On the **Building** page, upload **image-1** (TLC level 00, the ground floor) or **image-2** (level 01). Each takes about 10 to 30 seconds. Readings vary a little each time; if **Use this building** stays disabled, upload again. **Level 01 has no street exit** (people leave by the stairs), so the repair adds an exit where it can: drag the green exit square to a stairwell before you demo it. If Gemini is slow or fails, the built-in building still works for everything else. |
 | Backup | `demo-video/aria-demo-small.mp4` on the laptop, ready to play. If the Wi-Fi dies, show the video and keep talking. |
 | Not shown | The camera nodes (**Live nodes** page) are a future extension. Do not open it. The `dashboard.html` page is also not part of this demo. |
@@ -74,6 +74,7 @@ Use the metaphor to open and to close; in between, show the real system. Don't o
 | **Speed 1x** | Changes the simulation speed. | Speed up a slow part; keep 1x while explaining. |
 | **Reset** | Starts a fresh incident with the same building. | Between judges. |
 | **Firefighter phones** | Shows the QR code and link for a phone to join as a firefighter. Shows how many phones are on air. | Before the phone part of the demo. |
+| **Demo guide** | Opens a step-by-step panel that walks through every case below: what to **say**, one **Do it** button that performs the action on the board (exactly as a click would), and what to **watch**. **Next / Back**, or the ← → keys; **Enter** does the step. | **Use it to present.** Open it before the judges arrive and follow it. |
 
 **The "Break it" bar: chaos you cause on purpose**
 
@@ -126,7 +127,7 @@ Every action you take, and every big moment the incident produces by itself, sho
 | Item | What it is for |
 |---|---|
 | **Header: status, air, room, heat, signal** | Working / Withdrawing / Changing cylinder / MAYDAY; air left; where you are and how hot it is; whether you can hear anyone. |
-| **Talk to Command** | Opens a **live voice call** with the ElevenLabs agent. Ask anything ("what's my way out?", "is anyone in Lab 2?", "room clear", "mayday"). It answers only from this firefighter's live data, and you can interrupt it. **End call** hangs up. While the call is open, urgent orders from the incident are spoken into the call, but only when the agent is listening, never on top of it. |
+| **Talk to Command** | Opens a **live voice call** with the ElevenLabs agent, with the microphone **off**. **Hold to talk** (or hold Space on a laptop) opens the microphone only while it is held, like a radio, so noise around you never reaches Command; let go and Command answers. Ask anything ("what's my way out?", "is anyone in Lab 2?", "room clear", "mayday"). It answers only from this firefighter's live data. Holding the button while it speaks interrupts it. **End call** hangs up. While the call is open, urgent orders from the incident are spoken into the call, but only when the agent is listening, never on top of it. |
 | **Order** | One instruction at a time ("Search Lab 2. Door counts 1 inside."), with turn-by-turn steps underneath. |
 | **Your picture** | The building as **this firefighter** believes it, from their own copy. |
 | **Tap a room or a green exit** | Take manual control: "go there". ARIA refuses an order into a room believed to be burning, or when the firefighter is withdrawing on low air, and says why on the radio. |
@@ -156,6 +157,8 @@ The **Live nodes** page lets a laptop or phone camera join as a door counter or 
 ---
 
 ## 3. Demo scripts by track
+
+**Easiest way:** press **Demo guide** on the board. It walks through every case in this order, with the words to say and one button per step. The scripts below add the track-specific framing around it.
 
 Each script is about 3 minutes. If you only get 60 seconds, do the steps marked ★.
 
@@ -262,6 +265,7 @@ Show the measured results (`docs/evaluation.md`, or the last card of the video):
 
 - **Firefighters cannot look at a screen.** Hands hold a hose, tools or a casualty; gloves are thick; the mask fogs; smoke can mean zero visibility. **Voice is the only interface that works inside a burning building.** Radio is already how they work.
 - **A calm human voice lowers stress.** Under heat and fear, people take in short, calm instructions better than robotic ones. The agent is told to speak like an experienced fire officer: short sentences, one instruction at a time, no more than three sentences unless reading directions.
+- **Push to talk, like a real radio.** The microphone is open only while the firefighter holds the button. A fireground is loud (alarms, breathing apparatus, crews shouting), and an open microphone would send all of it to Command. Hold, speak, let go: Command answers.
 - **Interruption saves lives.** If a firefighter shouts "mayday" while the agent is talking, the agent must stop and act at once. The call uses ElevenLabs' turn-taking model in eager mode, so the firefighter can cut in at any point and the agent answers the new thing.
 - **It never makes things up.** The agent knows nothing about the fire except what its four tools return: `get_situation`, `get_directions`, `report`, `mayday`. It must call `get_situation` before answering, read directions back exactly, and never say a room is empty unless the data says confirmed empty.
 - **Command can break in.** When the incident changes during a call (a flashover, a new order to withdraw), the phone sends "URGENT FROM COMMAND" into the call, only while the agent is listening, so the agent is never talked over and passes it on in its own words.
@@ -287,7 +291,7 @@ Show the measured results (`docs/evaluation.md`, or the last card of the video):
 | **Read the brief** / **Speak the route** (board) | Text to speech for the commander. |
 | Demo video | Three voices (narrator, firefighter, Command), plus the music made with ElevenLabs Music. |
 
-**Demo (90 s):** ★ on the phone, press **Talk to Command**. Ask "Command, R1, what's my way out?" While it reads the route, **interrupt it**: "Command, mayday, mayday, I'm trapped!" It stops, raises the mayday (watch the board turn red), and tells you to stay put and keep your alarm sounding. Then ask "who is coming?".
+**Demo (90 s):** ★ on the phone, press **Talk to Command**. **Hold to talk** and ask "Command, R1, what's my way out?", then let go. While it reads the route, **hold the button again to interrupt it**: "Command, mayday, mayday, I'm trapped!" It stops, raises the mayday (watch the board turn red), and tells you to stay put and keep your alarm sounding. Then ask "who is coming?".
 
 ### 3.5 MLH: Best Use of Gemini API
 
