@@ -79,7 +79,18 @@ gcloud iam service-accounts keys create service-account-key.json --iam-account=r
 
 Key files are git-ignored. Copy one to a server by itself with `scp`, never inside the project folder you deploy.
 
-## Host it on Vultr
+## Deploy to Railway (Easiest)
+
+[![Deploy on Railway](https://railway.app/button.svg)](https://railway.app/template/xLWXPE?referralCode=alphasec)
+
+One-click deploy with automatic HTTPS. After deploying:
+1. Add your environment variables in Railway dashboard (see `.env.example`)
+2. Generate a domain in Settings → Networking
+3. Your app is live at `https://your-app.up.railway.app`
+
+Free tier: 500 hours/month. See [RAILWAY_DEPLOY.md](RAILWAY_DEPLOY.md) for detailed instructions.
+
+## Host it on Vultr (Alternative)
 
 A hosted copy gives phones the HTTPS address they need for their cameras, and lets devices on different networks join one mesh.
 

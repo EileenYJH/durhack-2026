@@ -2,7 +2,33 @@
 
 Railway provides automatic HTTPS, environment variable management, and deploys directly from your Git repository.
 
-## Quick Setup (5 minutes)
+## Method 1: One-Click Deploy (Recommended - 2 minutes)
+
+Click this button to deploy instantly:
+
+[![Deploy on Railway](https://railway.app/button.svg)](https://railway.app/template/xLWXPE?referralCode=alphasec)
+
+This will:
+1. Fork the repo to your GitHub account (or deploy directly)
+2. Create a new Railway project
+3. Deploy the app automatically
+
+After clicking:
+1. Sign in to Railway with GitHub
+2. Click "Deploy Now"
+3. Once deployed, click on your service
+4. Go to **Variables** tab and add your API keys:
+   - `GEMINI_API_KEY`
+   - `GEMINI_MODEL`
+   - `GEMINI_PROVIDER`
+   - `GCP_PROJECT`
+   - `GCP_LOCATION`
+   - `ELEVENLABS_API_KEY`
+   - `ELEVENLABS_VOICE_ID`
+5. Go to **Settings** → **Networking** → **Generate Domain**
+6. Done! Visit your URL
+
+## Method 2: Manual Setup (5 minutes)
 
 ### 1. Push to GitHub
 
